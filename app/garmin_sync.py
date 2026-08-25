@@ -14,6 +14,7 @@ from datetime import date, datetime, timedelta
 from .crypto import decrypt, encrypt
 from .database import get_db
 from .models import get_person_by_name, get_setting, set_setting
+from .weather import get_historical_weather
 
 logger = logging.getLogger(__name__)
 
@@ -207,9 +208,18 @@ def sync_activities(person_name=None, days_back=30):
             skipped += 1
 
     db.commit()
+
+    # Backfill weather for activities with GPS but no weather data
+    weather_filled = _backfill_weather(db)
+    if weather_filled > 0:
+        db.commit()
+
     set_last_sync_time()
 
-    return {"imported": imported, "skipped": skipped, "errors": errors}
+    result = {"imported": imported, "skipped": skipped, "errors": errors}
+    if weather_filled > 0:
+        result["weather_filled"] = weather_filled
+    return result
 
 
 def _get_existing_garmin_ids(db):
@@ -299,6 +309,10 @@ def _import_garmin_activity(db, activity, person_name, person_profile, garmin_id
     if steps:
         steps = int(steps)
 
+    # GPS coordinates
+    start_lat = activity.get("startLatitude")
+    start_lng = activity.get("startLongitude")
+
     # Person snapshot
     p_weight = person_profile["weight_kg"] if person_profile else None
     p_sex = person_profile["sex"] if person_profile else None
@@ -313,12 +327,201 @@ def _import_garmin_activity(db, activity, person_name, person_profile, garmin_id
             calories, avg_hr, max_hr, avg_pace_sec_per_km, best_pace_sec_per_km,
             total_ascent_m, total_descent_m, steps, elapsed_time_minutes,
             min_elevation_m, max_elevation_m, notes, details, person,
-            person_weight_kg, person_sex, person_birth_year
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            person_weight_kg, person_sex, person_birth_year,
+            start_latitude, start_longitude
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (start_time, activity_type, title, duration_minutes, distance_km,
          calories, avg_hr, max_hr, avg_pace_sec_per_km, best_pace_sec_per_km,
          total_ascent_m, total_descent_m, steps, elapsed_time_minutes,
          None, None, None, details, person_name,
-         p_weight, p_sex, p_birth_year),
+         p_weight, p_sex, p_birth_year,
+         start_lat, start_lng),
     )
     return True
+
+
+
+def _backfill_weather(db):
+    """Backfill weather data for activities that have GPS coords but no weather.
+    Only processes run/walk/hike activities. Returns count of activities updated.
+    """
+    import time
+
+    rows = db.execute(
+        """SELECT id, activity_date, start_latitude, start_longitude
+         FROM activities
+         WHERE start_latitude IS NOT NULL
+           AND start_longitude IS NOT NULL
+           AND weather_temp_c IS NULL
+           AND activity_type IN ('run', 'walk', 'hike')
+         ORDER BY activity_date DESC
+         LIMIT 50"""
+    ).fetchall()
+
+    if not rows:
+        return 0
+
+    filled = 0
+    for row in rows:
+        try:
+            weather = get_historical_weather(
+                row["start_latitude"],
+                row["start_longitude"],
+                row["activity_date"],
+            )
+            if weather:
+                db.execute(
+                    "UPDATE activities SET weather_temp_c = ?, weather_humidity = ? WHERE id = ?",
+                    (weather["temperature_c"], weather["humidity"], row["id"]),
+                )
+                filled += 1
+                # Rate limit: Open-Meteo allows 10k/day but be polite
+                time.sleep(0.2)
+        except Exception as e:
+            logger.warning(f"Weather backfill failed for activity {row['id']}: {e}")
+            continue
+
+    return filled
+
+
+def backfill_all_weather():
+    """Manually trigger weather backfill for all eligible activities.
+    Called from a route. Returns count of activities updated.
+    """
+    db = get_db()
+    filled = _backfill_weather(db)
+    if filled > 0:
+        db.commit()
+    return filled
+
+
+def sync_daily_health(person_name, days_back=30):
+    """Sync daily health metrics from Garmin Connect.
+
+    Fetches steps, resting HR, stress, calories, weight, and VO2 Max
+    for each day in the date range.
+
+    Args:
+        person_name: Name of the person to associate data with.
+        days_back: How many days back to sync.
+
+    Returns:
+        dict with 'synced' (days count), 'errors' list.
+    """
+    from .models import upsert_daily_health
+
+    email, password = get_garmin_credentials()
+    if not email or not password:
+        return {"synced": 0, "errors": ["No Garmin credentials configured."]}
+
+    if not person_name:
+        return {"synced": 0, "errors": ["Person name is required for health sync."]}
+
+    try:
+        from garminconnect import Garmin
+
+        token_dir = _get_token_dir()
+        garmin = Garmin(email=email, password=password)
+        garmin.login(token_dir)
+
+    except Exception as e:
+        return {"synced": 0, "errors": [f"Connection failed: {str(e)}"]}
+
+    end_date = date.today()
+    start_date = end_date - timedelta(days=days_back)
+
+    synced = 0
+    errors = []
+
+    current = start_date
+    while current <= end_date:
+        date_str = current.isoformat()
+        try:
+            health_data = _fetch_daily_health(garmin, date_str)
+            if health_data:
+                upsert_daily_health(date_str, person_name, **health_data)
+                synced += 1
+        except Exception as e:
+            errors.append(f"{date_str}: {str(e)}")
+
+        current += timedelta(days=1)
+
+    return {"synced": synced, "errors": errors}
+
+
+def _fetch_daily_health(garmin, date_str):
+    """Fetch all health metrics for a single day from Garmin.
+    Returns dict of health fields, or None if no data.
+    """
+    data = {}
+
+    # Steps and calories from user summary
+    try:
+        summary = garmin.get_user_summary(date_str)
+        if summary:
+            data["steps"] = summary.get("totalSteps")
+            data["calories_total"] = summary.get("totalKilocalories")
+            data["calories_active"] = summary.get("activeKilocalories")
+    except Exception:
+        pass
+
+    # Resting heart rate
+    try:
+        hr = garmin.get_heart_rates(date_str)
+        if hr:
+            data["resting_hr"] = hr.get("restingHeartRate")
+    except Exception:
+        pass
+
+    # Stress data
+    try:
+        stress = garmin.get_stress_data(date_str)
+        if stress:
+            data["stress_avg"] = stress.get("avgStressLevel")
+            data["stress_max"] = stress.get("maxStressLevel")
+            # Durations are in seconds
+            data["stress_low_duration"] = stress.get("lowStressDuration")
+            data["stress_medium_duration"] = stress.get("mediumStressDuration")
+            data["stress_high_duration"] = stress.get("highStressDuration")
+    except Exception:
+        pass
+
+    # Weight from body composition
+    try:
+        body = garmin.get_body_composition(date_str)
+        if body:
+            # Body composition may return weight in grams or have nested structure
+            weight_list = body.get("dateWeightList") or body.get("weightList") or []
+            if weight_list:
+                # Take the most recent weight entry for that day
+                latest = weight_list[-1]
+                weight_g = latest.get("weight")
+                if weight_g and weight_g > 0:
+                    data["weight_kg"] = weight_g / 1000.0  # grams to kg
+    except Exception:
+        pass
+
+    # VO2 Max
+    try:
+        # Try the fitness stats endpoint
+        fitness = garmin.get_max_metrics(date_str)
+        if fitness:
+            # maxMetrics returns a list of metrics
+            if isinstance(fitness, list):
+                for metric in fitness:
+                    if metric.get("generic") and metric["generic"].get("vo2MaxValue"):
+                        data["vo2_max"] = metric["generic"]["vo2MaxValue"]
+                        break
+            elif isinstance(fitness, dict):
+                vo2 = fitness.get("vo2MaxValue") or fitness.get("vo2Max")
+                if vo2:
+                    data["vo2_max"] = vo2
+    except Exception:
+        pass
+
+    # Return None if we got nothing useful
+    if not any(v is not None for v in data.values()):
+        return None
+
+    # Filter out None values
+    return {k: v for k, v in data.items() if v is not None}

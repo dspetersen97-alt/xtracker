@@ -27,10 +27,12 @@ def create_app(config_overrides=None):
     from .routes.activities import activities_bp
     from .routes.progress import progress_bp
     from .routes.settings import settings_bp
+    from .routes.health import health_bp
     app.register_blueprint(main_bp)
     app.register_blueprint(activities_bp)
     app.register_blueprint(progress_bp)
     app.register_blueprint(settings_bp)
+    app.register_blueprint(health_bp)
 
     # Error handlers
     @app.errorhandler(404)

@@ -7,7 +7,9 @@ from ..garmin_sync import (
     get_garmin_credentials,
     get_last_sync_time,
     save_garmin_credentials,
+    backfill_all_weather,
     sync_activities,
+    sync_daily_health,
     test_connection as garmin_test_connection,
 )
 from ..importer import import_garmin_csv
@@ -321,7 +323,10 @@ def garmin_sync():
     result = sync_activities(person_name=person, days_back=days)
 
     if result["imported"] > 0:
-        flash(f"Synced {result['imported']} new activities from Garmin.", "success")
+        msg = f"Synced {result['imported']} new activities from Garmin."
+        if result.get("weather_filled"):
+            msg += f" Weather data added for {result['weather_filled']} activities."
+        flash(msg, "success")
     elif not result["errors"]:
         flash("No new activities to sync.", "success")
 
@@ -331,4 +336,45 @@ def garmin_sync():
     for err in result["errors"][:5]:
         flash(err, "error")
 
+    return redirect(url_for("settings.exercise_types"))
+
+
+
+@settings_bp.route("/settings/garmin/sync-health", methods=["POST"])
+def garmin_sync_health():
+    """Sync daily health metrics from Garmin Connect."""
+    person = request.form.get("person", "").strip() or None
+    days_back = request.form.get("days_back", "30").strip()
+
+    if not person:
+        flash("Please select a person for health sync.", "error")
+        return redirect(url_for("settings.exercise_types"))
+
+    try:
+        days = int(days_back)
+    except ValueError:
+        days = 30
+
+    result = sync_daily_health(person_name=person, days_back=days)
+
+    if result["synced"] > 0:
+        flash(f"Synced health data for {result['synced']} days.", "success")
+    elif not result["errors"]:
+        flash("No health data available for the selected period.", "success")
+
+    for err in result["errors"][:5]:
+        flash(err, "error")
+
+    return redirect(url_for("settings.exercise_types"))
+
+
+
+@settings_bp.route("/settings/garmin/backfill-weather", methods=["POST"])
+def garmin_backfill_weather():
+    """Backfill weather data for activities with GPS but no weather."""
+    filled = backfill_all_weather()
+    if filled > 0:
+        flash(f"Weather data added for {filled} activities.", "success")
+    else:
+        flash("No activities need weather data (all up to date or missing GPS).", "success")
     return redirect(url_for("settings.exercise_types"))

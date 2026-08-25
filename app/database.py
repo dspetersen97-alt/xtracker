@@ -127,6 +127,12 @@ def _migrate(db):
     if "weather_multiplier" not in existing_cols:
         db.execute("ALTER TABLE activities ADD COLUMN weather_multiplier REAL")
 
+    # Add GPS coordinate columns to activities
+    if "start_latitude" not in existing_cols:
+        db.execute("ALTER TABLE activities ADD COLUMN start_latitude REAL")
+    if "start_longitude" not in existing_cols:
+        db.execute("ALTER TABLE activities ADD COLUMN start_longitude REAL")
+
     # Migrate people table: add profile columns
     people_cursor = db.execute("PRAGMA table_info(people)")
     people_cols = {row[1] for row in people_cursor.fetchall()}
@@ -171,6 +177,8 @@ CREATE TABLE IF NOT EXISTS activities (
     person_birth_year INTEGER,
     weather_temp_c REAL,
     weather_humidity REAL,
+    start_latitude REAL,
+    start_longitude REAL,
     score REAL,
     weather_multiplier REAL
 );
@@ -199,6 +207,27 @@ CREATE TABLE IF NOT EXISTS people (
     sex TEXT,
     birth_year INTEGER
 );
+
+CREATE TABLE IF NOT EXISTS daily_health (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    person TEXT NOT NULL,
+    steps INTEGER,
+    resting_hr INTEGER,
+    calories_total INTEGER,
+    calories_active INTEGER,
+    stress_avg INTEGER,
+    stress_max INTEGER,
+    stress_low_duration INTEGER,
+    stress_medium_duration INTEGER,
+    stress_high_duration INTEGER,
+    weight_kg REAL,
+    vo2_max REAL,
+    UNIQUE(date, person)
+);
+
+CREATE INDEX IF NOT EXISTS idx_daily_health_date ON daily_health(date);
+CREATE INDEX IF NOT EXISTS idx_daily_health_person ON daily_health(person);
 
 """
 

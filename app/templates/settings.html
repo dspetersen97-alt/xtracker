@@ -36,28 +36,61 @@
     </p>
 
     <!-- Sync Now -->
-    <form method="POST" action="{{ url_for('settings.garmin_sync') }}" style="margin-bottom: 1rem;">
-        <div class="grid">
-            <div>
-                <label for="sync-person">Sync for person</label>
-                <select id="sync-person" name="person">
-                    <option value="">-- No person --</option>
-                    {% for p in people %}
-                    <option value="{{ p.name }}">{{ p.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div>
-                <label for="sync-days">Days back</label>
-                <select id="sync-days" name="days_back">
-                    <option value="7">7 days</option>
-                    <option value="30" selected>30 days</option>
-                    <option value="90">90 days</option>
-                    <option value="365">1 year</option>
-                </select>
-            </div>
+    <div class="grid" style="margin-bottom: 1rem;">
+        <div>
+            <label for="sync-person">Person</label>
+            <select id="sync-person" name="person" form="form-sync-activities">
+                <option value="">-- No person --</option>
+                {% for p in people %}
+                <option value="{{ p.name }}">{{ p.name }}</option>
+                {% endfor %}
+            </select>
         </div>
-        <button type="submit">Sync Now</button>
+        <div>
+            <label for="sync-days">Days back</label>
+            <select id="sync-days" name="days_back" form="form-sync-activities">
+                <option value="7">7 days</option>
+                <option value="30" selected>30 days</option>
+                <option value="90">90 days</option>
+                <option value="365">1 year</option>
+                <option value="1825">5 years</option>
+                <option value="9999">All time</option>
+            </select>
+        </div>
+    </div>
+    <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+        <form id="form-sync-activities" method="POST" action="{{ url_for('settings.garmin_sync') }}" style="margin: 0;">
+            <input type="hidden" name="person" id="hidden-person-activities">
+            <input type="hidden" name="days_back" id="hidden-days-activities">
+            <button type="submit">Sync Activities</button>
+        </form>
+        <form method="POST" action="{{ url_for('settings.garmin_sync_health') }}" style="margin: 0;">
+            <input type="hidden" name="person" id="hidden-person-health">
+            <input type="hidden" name="days_back" id="hidden-days-health">
+            <button type="submit" class="secondary">Sync Health Data</button>
+        </form>
+    </div>
+    <script>
+    // Sync the shared selectors to the hidden inputs in each form
+    document.addEventListener('DOMContentLoaded', function() {
+        var personSel = document.getElementById('sync-person');
+        var daysSel = document.getElementById('sync-days');
+        function syncInputs() {
+            document.getElementById('hidden-person-activities').value = personSel.value;
+            document.getElementById('hidden-days-activities').value = daysSel.value;
+            document.getElementById('hidden-person-health').value = personSel.value;
+            document.getElementById('hidden-days-health').value = daysSel.value;
+        }
+        personSel.addEventListener('change', syncInputs);
+        daysSel.addEventListener('change', syncInputs);
+        syncInputs();
+    });
+    </script>
+
+    <!-- Weather Backfill -->
+    <form method="POST" action="{{ url_for('settings.garmin_backfill_weather') }}" style="margin-bottom: 1rem;">
+        <button type="submit" class="outline contrast">Backfill Weather Data</button>
+        <small>Fetches historical weather for activities with GPS but no weather info.</small>
     </form>
 
     <!-- Test / Disconnect -->

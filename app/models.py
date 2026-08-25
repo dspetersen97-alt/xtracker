@@ -280,3 +280,82 @@ def update_activity(activity_id, **kwargs):
     params.append(activity_id)
     db.execute(f"UPDATE activities SET {', '.join(fields)} WHERE id = ?", params)
     db.commit()
+
+
+
+# --- Daily Health ---
+
+
+def upsert_daily_health(date_str, person, **kwargs):
+    """Insert or update a daily health record.
+    Uses UPSERT (INSERT OR REPLACE) keyed on (date, person).
+    """
+    db = get_db()
+    allowed = {
+        "steps", "resting_hr", "calories_total", "calories_active",
+        "stress_avg", "stress_max", "stress_low_duration",
+        "stress_medium_duration", "stress_high_duration",
+        "weight_kg", "vo2_max",
+    }
+
+    # Get existing record to preserve fields not being updated
+    existing = get_daily_health(date_str, person)
+
+    fields = {"date": date_str, "person": person}
+    for key, value in kwargs.items():
+        if key in allowed:
+            fields[key] = value
+
+    # Merge with existing data (don't overwrite with None)
+    if existing:
+        for key in allowed:
+            if key not in fields or fields.get(key) is None:
+                fields[key] = existing.get(key)
+
+    columns = list(fields.keys())
+    placeholders = ", ".join(["?"] * len(columns))
+    col_names = ", ".join(columns)
+
+    db.execute(
+        f"INSERT OR REPLACE INTO daily_health ({col_names}) VALUES ({placeholders})",
+        [fields[c] for c in columns],
+    )
+    db.commit()
+
+
+def get_daily_health(date_str, person):
+    """Get a single daily health record. Returns dict or None."""
+    db = get_db()
+    row = db.execute(
+        "SELECT * FROM daily_health WHERE date = ? AND person = ?",
+        (date_str, person),
+    ).fetchone()
+    if row is None:
+        return None
+    return dict(row)
+
+
+def get_daily_health_range(person, date_from, date_to):
+    """Get daily health records for a person within a date range."""
+    db = get_db()
+    rows = db.execute(
+        """SELECT * FROM daily_health
+           WHERE person = ? AND date >= ? AND date <= ?
+           ORDER BY date ASC""",
+        (person, date_from, date_to),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_latest_weight(person):
+    """Get the most recent weight entry for a person from daily_health."""
+    db = get_db()
+    row = db.execute(
+        """SELECT weight_kg FROM daily_health
+           WHERE person = ? AND weight_kg IS NOT NULL
+           ORDER BY date DESC LIMIT 1""",
+        (person,),
+    ).fetchone()
+    if row:
+        return row["weight_kg"]
+    return None
