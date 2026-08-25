@@ -364,19 +364,25 @@ def _backfill_weather(db, garmin):
             weather = garmin.get_activity_weather(str(garmin_id))
 
             if weather:
-                temp_c = weather.get("temp")
+                temp = weather.get("temp")
                 humidity = weather.get("relativeHumidity")
 
                 # Some responses nest differently
-                if temp_c is None:
-                    temp_c = weather.get("temperature")
+                if temp is None:
+                    temp = weather.get("temperature")
                 if humidity is None:
                     humidity = weather.get("humidity")
 
-                if temp_c is not None:
+                if temp is not None:
+                    temp = float(temp)
+                    # Garmin returns temp in user display units.
+                    # Convert to Celsius if it looks like Fahrenheit.
+                    # Reasonable outdoor temp in C is -50 to 55. Above 55 is almost certainly F.
+                    if temp > 55:
+                        temp = (temp - 32) * 5 / 9
                     db.execute(
                         "UPDATE activities SET weather_temp_c = ?, weather_humidity = ? WHERE id = ?",
-                        (float(temp_c), float(humidity) if humidity else None, row["id"]),
+                        (round(temp, 1), float(humidity) if humidity else None, row["id"]),
                     )
                     filled += 1
 
