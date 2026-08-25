@@ -16,6 +16,19 @@
         {% endfor %}
     </select>
 
+    <!-- Person -->
+    {% if people %}
+    <label for="person">Person</label>
+    <select id="person" name="person" aria-label="Select person">
+        <option value="">-- No person --</option>
+        {% for p in people %}
+        <option value="{{ p.name }}" {% if form and form.get('person') == p.name %}selected{% endif %}>
+            {{ p.name }}
+        </option>
+        {% endfor %}
+    </select>
+    {% endif %}
+
     <!-- Date -->
     <label for="activity_date">Date</label>
     <input type="date" id="activity_date" name="activity_date"
@@ -80,6 +93,28 @@
             </div>
         </div>
         <button type="button" id="add-exercise" class="secondary outline">+ Add Exercise</button>
+    </div>
+
+    <!-- Weather (optional, for scoring) -->
+    <div id="field-weather" class="type-field" data-types="hike,walk,run,cardio">
+        <details>
+            <summary>Weather Conditions (optional - earns bonus points)</summary>
+            <div class="grid">
+                <div>
+                    <label for="weather_temp">Temperature (&deg;{{ units_label }})</label>
+                    <input type="number" id="weather_temp" name="weather_temp" step="0.1"
+                           placeholder="e.g. {{ '85' if units == 'imperial' else '30' }}"
+                           value="{{ form.get('weather_temp', '') if form else '' }}">
+                </div>
+                <div>
+                    <label for="weather_humidity">Humidity (%)</label>
+                    <input type="number" id="weather_humidity" name="weather_humidity"
+                           min="0" max="100" step="1"
+                           placeholder="e.g. 65"
+                           value="{{ form.get('weather_humidity', '') if form else '' }}">
+                </div>
+            </div>
+        </details>
     </div>
 
     <!-- Notes (all types) -->

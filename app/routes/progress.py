@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request
 
-from ..stats import get_summary_stats, get_type_stats, strength_exercise_progression
+from ..stats import get_summary_stats, get_type_stats, strength_exercise_progression, weekly_health_averages
+from ..models import get_people
 
 progress_bp = Blueprint("progress", __name__)
 
@@ -16,12 +17,18 @@ def dashboard():
     """Main progress dashboard with summary charts."""
     weeks_param = request.args.get("weeks", "12")
     weeks_back = RANGE_OPTIONS.get(weeks_param, 12)
+    person = request.args.get("person", "").strip()
 
     stats = get_summary_stats(weeks_back)
+    health = weekly_health_averages(person=person or None, weeks_back=weeks_back)
+    people = get_people()
 
     return render_template(
         "progress.html",
         stats=stats,
+        health=health,
+        people=people,
+        current_person=person,
         weeks_back=weeks_back,
         current_weeks=weeks_param,
     )

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}History — xtracker{% endblock %}
+{% block title %}History - xtracker{% endblock %}
 
 {% block content %}
 <h1>Workout History</h1>
@@ -17,6 +17,19 @@
             {% endfor %}
         </select>
     </div>
+    {% if people %}
+    <div>
+        <label for="filter-person">Person</label>
+        <select id="filter-person" name="person" aria-label="Filter by person">
+            <option value="">Everyone</option>
+            {% for p in people %}
+            <option value="{{ p.name }}" {% if current_person == p.name %}selected{% endif %}>
+                {{ p.name }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    {% endif %}
     <div>
         <label for="filter-from">From</label>
         <input type="date" id="filter-from" name="from" value="{{ date_from }}">
@@ -27,7 +40,7 @@
     </div>
     <div>
         <button type="submit" class="outline">Filter</button>
-        {% if current_type or date_from or date_to %}
+        {% if current_type or date_from or date_to or current_person %}
         <a href="{{ url_for('activities.history') }}" role="button" class="secondary outline">Clear</a>
         {% endif %}
     </div>
@@ -45,22 +58,31 @@
                     <span class="badge badge-{{ 'outdoor' if activity.activity_type in ('hike', 'walk', 'run') else ('strength' if activity.activity_type == 'strength' else 'cardio') }}">
                         {{ activity.activity_type | capitalize }}
                     </span>
-                    <strong style="margin-left: 0.5rem;">{{ activity.activity_date }}</strong>
+                    <strong style="margin-left: 0.5rem;">{% if activity.title %}{{ activity.title }}{% else %}{{ activity.activity_date }}{% endif %}</strong>
                 </div>
                 <a href="{{ url_for('activities.activity_detail', activity_id=activity.id) }}">View</a>
             </div>
+            <small>{{ activity.activity_date }}{% if activity.person %} &middot; {{ activity.person }}{% endif %}</small>
         </header>
         <div style="display: flex; gap: 1.5rem; flex-wrap: wrap;">
-            {% if activity.duration_minutes %}
-            <span>&#9201; {{ activity.duration_minutes }} min</span>
+            {% if activity.duration_display and activity.duration_display != '--' %}
+            <span>&#9201; {{ activity.duration_display }}</span>
             {% endif %}
-            {% if activity.distance_km %}
-            <span>&#128099; {{ "%.1f" | format(activity.distance_km) }} km</span>
+            {% if activity.distance_display %}
+            <span>&#128099; {{ activity.distance_display }} {{ activity.distance_unit }}</span>
             {% endif %}
             {% if activity.calories %}
             <span>&#128293; {{ activity.calories }} cal</span>
             {% endif %}
         </div>
+        {% if activity.computed_score %}
+        <div style="margin-top: 0.5rem;">
+            <span style="font-weight: 600; color: var(--pico-primary);">&#9733; {{ activity.computed_score }} pts</span>
+            {% if activity.weather_multiplier_computed and activity.weather_multiplier_computed > 1.0 %}
+            <small style="margin-left: 0.5rem; color: var(--pico-muted-color);">({{ activity.weather_multiplier_computed }}x weather)</small>
+            {% endif %}
+        </div>
+        {% endif %}
         {% if activity.notes %}
         <p><small>{{ activity.notes | truncate(100) }}</small></p>
         {% endif %}
@@ -72,7 +94,7 @@
 {% if total_pages > 1 %}
 <nav class="pagination" aria-label="Page navigation">
     {% if page > 1 %}
-    <a href="{{ url_for('activities.history', type=current_type, to=date_to, page=page-1) }}{{ '&from=' + date_from if date_from else '' }}" role="button" class="outline">
+    <a href="{{ url_for('activities.history', type=current_type, person=current_person, to=date_to, page=page-1) }}{{ '&from=' + date_from if date_from else '' }}" role="button" class="outline">
         &larr; Newer
     </a>
     {% else %}
@@ -82,7 +104,7 @@
     <span>Page {{ page }} of {{ total_pages }}</span>
 
     {% if page < total_pages %}
-    <a href="{{ url_for('activities.history', type=current_type, to=date_to, page=page+1) }}{{ '&from=' + date_from if date_from else '' }}" role="button" class="outline">
+    <a href="{{ url_for('activities.history', type=current_type, person=current_person, to=date_to, page=page+1) }}{{ '&from=' + date_from if date_from else '' }}" role="button" class="outline">
         Older &rarr;
     </a>
     {% else %}

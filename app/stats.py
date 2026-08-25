@@ -4,6 +4,11 @@ from datetime import date, timedelta
 from .database import get_db
 
 
+def _parse_date(date_str):
+    """Parse a date from activity_date which may be 'YYYY-MM-DD' or 'YYYY-MM-DD HH:MM:SS'."""
+    return date.fromisoformat(date_str.split(" ")[0])
+
+
 def _week_start(d):
     """Get Monday of the week containing date d."""
     return d - timedelta(days=d.weekday())
@@ -34,7 +39,7 @@ def workouts_per_week(weeks_back=12):
     # Build a lookup: week_start -> count
     week_counts = {w: 0 for w in weeks}
     for row in rows:
-        d = date.fromisoformat(row["activity_date"])
+        d = _parse_date(row["activity_date"])
         ws = _week_start(d)
         if ws in week_counts:
             week_counts[ws] += row["cnt"]
@@ -62,7 +67,7 @@ def distance_per_week(weeks_back=12):
 
     week_totals = {w: 0.0 for w in weeks}
     for row in rows:
-        d = date.fromisoformat(row["activity_date"])
+        d = _parse_date(row["activity_date"])
         ws = _week_start(d)
         if ws in week_totals:
             week_totals[ws] += row["total_dist"] or 0
@@ -90,7 +95,7 @@ def duration_per_week(weeks_back=12):
 
     week_totals = {w: 0 for w in weeks}
     for row in rows:
-        d = date.fromisoformat(row["activity_date"])
+        d = _parse_date(row["activity_date"])
         ws = _week_start(d)
         if ws in week_totals:
             week_totals[ws] += row["total_dur"] or 0
@@ -307,3 +312,64 @@ def get_type_stats(activity_type, weeks_back=12):
             "pace": pace_over_time(activity_type, weeks_back),
             "duration": duration_over_time(activity_type, weeks_back),
         }
+
+
+
+# --- Health metrics for Progress page ---
+
+
+def weekly_health_averages(person=None, weeks_back=12):
+    """Get weekly averages of key health metrics for the progress page.
+
+    Returns dict with 'labels' (week starts), 'resting_hr', 'weight', 'steps_avg', 'vo2_max'.
+    Each value list has one entry per week.
+    If person is None, averages across all people.
+    """
+    db = get_db()
+    weeks = _get_week_labels(weeks_back)
+    start_date = weeks[0].isoformat()
+
+    query = """
+        SELECT date, resting_hr, weight_kg, steps, vo2_max
+        FROM daily_health
+        WHERE date >= ?
+    """
+    params = [start_date]
+
+    if person:
+        query += " AND person = ?"
+        params.append(person)
+
+    query += " ORDER BY date ASC"
+    rows = db.execute(query, params).fetchall()
+
+    # Bucket into weeks
+    week_data = {w: {"hr": [], "weight": [], "steps": [], "vo2": []} for w in weeks}
+
+    for row in rows:
+        try:
+            d = date.fromisoformat(row["date"])
+        except (ValueError, TypeError):
+            continue
+        ws = _week_start(d)
+        if ws in week_data:
+            if row["resting_hr"]:
+                week_data[ws]["hr"].append(row["resting_hr"])
+            if row["weight_kg"]:
+                week_data[ws]["weight"].append(row["weight_kg"])
+            if row["steps"]:
+                week_data[ws]["steps"].append(row["steps"])
+            if row["vo2_max"]:
+                week_data[ws]["vo2"].append(row["vo2_max"])
+
+    # Compute averages per week
+    def avg(lst):
+        return round(sum(lst) / len(lst), 1) if lst else None
+
+    return {
+        "labels": [w.strftime("%b %d") for w in weeks],
+        "resting_hr": [avg(week_data[w]["hr"]) for w in weeks],
+        "weight": [avg(week_data[w]["weight"]) for w in weeks],
+        "steps_avg": [avg(week_data[w]["steps"]) for w in weeks],
+        "vo2_max": [avg(week_data[w]["vo2"]) for w in weeks],
+    }

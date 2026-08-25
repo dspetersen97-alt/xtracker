@@ -11,3 +11,8 @@ venv
 *.egg-info
 dist
 build
+sample_data/
+tests/
+.pytest_cache/
+clear_data.py
+sync_weather.py
