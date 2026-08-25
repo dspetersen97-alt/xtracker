@@ -25,6 +25,30 @@
     <a href="{{ url_for('settings.import_page') }}" role="button" class="outline">Import CSV</a>
 </article>
 
+<!-- People -->
+<article>
+    <header><h2>People</h2></header>
+    {% if people %}
+    <ul>
+        {% for p in people %}
+        <li style="display: flex; justify-content: space-between; align-items: center;">
+            {{ p.name }}
+            <form method="POST" action="{{ url_for('settings.remove_person', person_id=p.id) }}"
+                  onsubmit="return confirm('Remove this person?');" style="display: inline; margin: 0;">
+                <button type="submit" class="secondary outline" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">Remove</button>
+            </form>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p><small>No people added yet.</small></p>
+    {% endif %}
+    <form method="POST" action="{{ url_for('settings.add_person') }}" style="display: flex; gap: 0.5rem; align-items: end;">
+        <input type="text" name="name" placeholder="Name" required style="margin-bottom: 0;">
+        <button type="submit" class="outline" style="white-space: nowrap;">Add Person</button>
+    </form>
+</article>
+
 <!-- Exercise Types -->
 <h2>Exercise Types</h2>
 

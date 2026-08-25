@@ -49,7 +49,7 @@ def _parse_int(value):
         return None
 
 
-def import_garmin_csv(file_content, source_units="imperial"):
+def import_garmin_csv(file_content, source_units="imperial", person=None):
     """Import activities from a Garmin Connect CSV export.
 
     Args:
@@ -68,7 +68,7 @@ def import_garmin_csv(file_content, source_units="imperial"):
 
     for i, row in enumerate(reader, start=2):
         try:
-            result = _import_row(db, row, source_units)
+            result = _import_row(db, row, source_units, person)
             if result:
                 imported += 1
             else:
@@ -81,7 +81,7 @@ def import_garmin_csv(file_content, source_units="imperial"):
     return {"imported": imported, "skipped": skipped, "errors": errors}
 
 
-def _import_row(db, row, source_units):
+def _import_row(db, row, source_units, person=None):
     """Import a single CSV row. Returns True if imported, False if skipped."""
     # Activity type mapping
     raw_type = row.get("Activity Type", "").strip().lower()
@@ -89,11 +89,11 @@ def _import_row(db, row, source_units):
     if not activity_type:
         return False
 
-    # Date - extract just the date part from '2026-08-24 17:04:37'
+    # Date - store full datetime if available
     date_str = row.get("Date", "").strip()
     if not date_str:
         return False
-    activity_date = date_str.split(" ")[0]
+    activity_date = date_str  # Keep full datetime e.g. '2026-08-24 17:04:37'
 
     # Title
     title = row.get("Title", "").strip() or None
@@ -108,13 +108,13 @@ def _import_row(db, row, source_units):
     # Calories
     calories = _parse_int(row.get("Calories", ""))
 
-    # Time (moving time) -> duration_minutes
+    # Time (moving time) -> duration_minutes (as float to preserve seconds)
     time_str = row.get("Time", "").strip()
     duration_minutes = None
     if time_str and time_str != "--":
         parsed = parse_time_string(time_str)
         if parsed is not None:
-            duration_minutes = round(parsed)
+            duration_minutes = parsed
 
     # Elapsed Time
     elapsed_str = row.get("Elapsed Time", "").strip()
@@ -166,11 +166,11 @@ def _import_row(db, row, source_units):
             activity_date, activity_type, title, duration_minutes, distance_km,
             calories, avg_hr, max_hr, avg_pace_sec_per_km, best_pace_sec_per_km,
             total_ascent_m, total_descent_m, steps, elapsed_time_minutes,
-            min_elevation_m, max_elevation_m, notes, details
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}')""",
+            min_elevation_m, max_elevation_m, notes, details, person
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', ?)""",
         (activity_date, activity_type, title, duration_minutes, distance_km,
          calories, avg_hr, max_hr, avg_pace_sec_per_km, best_pace_sec_per_km,
          total_ascent_m, total_descent_m, steps, elapsed_time_minutes,
-         min_elevation_m, max_elevation_m, None),
+         min_elevation_m, max_elevation_m, None, person),
     )
     return True

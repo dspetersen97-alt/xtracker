@@ -10,6 +10,7 @@ from ..models import (
     get_activities,
     get_activity_by_id,
     get_exercise_types,
+    get_people,
     get_units,
 )
 from ..units import convert_activity_for_display
@@ -21,8 +22,9 @@ activities_bp = Blueprint("activities", __name__)
 def log_workout():
     """Show the log workout form."""
     exercise_types = get_exercise_types()
+    people = get_people()
     today = date.today().isoformat()
-    return render_template("log.html", exercise_types=exercise_types, today=today)
+    return render_template("log.html", exercise_types=exercise_types, people=people, today=today)
 
 
 @activities_bp.route("/log", methods=["POST"])
@@ -146,6 +148,7 @@ def log_workout_submit():
             form=request.form,
         ), 422
 
+    person_name = request.form.get("person", "").strip() or None
     activity_id = create_activity(
         activity_date=activity_date,
         activity_type=activity_type,
@@ -154,6 +157,7 @@ def log_workout_submit():
         calories=calories_val,
         notes=notes or None,
         details=details if details else None,
+        person=person_name,
     )
 
     flash("Workout logged successfully!", "success")
@@ -166,6 +170,7 @@ def history():
     activity_type = request.args.get("type", "").strip()
     date_from = request.args.get("from", "").strip()
     date_to = request.args.get("to", "").strip()
+    person = request.args.get("person", "").strip()
     page = request.args.get("page", 1, type=int)
     per_page = 20
 
@@ -174,6 +179,7 @@ def history():
         activity_type=activity_type or None,
         date_from=date_from or None,
         date_to=date_to or None,
+        person=person or None,
         limit=per_page,
         offset=offset,
     )
@@ -182,6 +188,7 @@ def history():
         activity_type=activity_type or None,
         date_from=date_from or None,
         date_to=date_to or None,
+        person=person or None,
     )
 
     total_pages = (total + per_page - 1) // per_page if total > 0 else 1
@@ -191,11 +198,14 @@ def history():
     # Convert activities for display
     display_activities = [convert_activity_for_display(a, units) for a in activities]
 
+    people = get_people()
     return render_template(
         "history.html",
         activities=display_activities,
         exercise_types=exercise_types,
+        people=people,
         current_type=activity_type,
+        current_person=person,
         date_from=date_from,
         date_to=date_to,
         page=page,

@@ -5,8 +5,11 @@ from flask import Blueprint, flash, redirect, render_template, request, url_for
 from ..importer import import_garmin_csv
 from ..models import (
     create_exercise_type,
+    create_person,
     delete_exercise_type,
+    delete_person,
     get_exercise_types,
+    get_people,
     get_units,
     set_units,
 )
@@ -37,7 +40,8 @@ def exercise_types():
     """List all exercise types and app settings."""
     types = get_exercise_types()
     units = get_units()
-    return render_template("settings.html", exercise_types=types, units=units)
+    people = get_people()
+    return render_template("settings.html", exercise_types=types, units=units, people=people)
 
 
 @settings_bp.route("/settings/types/new")
@@ -117,7 +121,8 @@ def toggle_units():
 @settings_bp.route("/settings/import", methods=["GET"])
 def import_page():
     """Show the CSV import form."""
-    return render_template("settings_import.html")
+    people = get_people()
+    return render_template("settings_import.html", people=people)
 
 
 @settings_bp.route("/settings/import", methods=["POST"])
@@ -137,10 +142,11 @@ def import_csv():
         return redirect(url_for("settings.import_page"))
 
     source_units = request.form.get("source_units", "imperial")
+    person = request.form.get("person", "").strip() or None
 
     try:
         content = file.read().decode("utf-8")
-        result = import_garmin_csv(content, source_units=source_units)
+        result = import_garmin_csv(content, source_units=source_units, person=person)
 
         if result["imported"] > 0:
             flash(f"Successfully imported {result['imported']} activities.", "success")
@@ -153,4 +159,25 @@ def import_csv():
     except Exception as e:
         flash(f"Import failed: {str(e)}", "error")
 
+    return redirect(url_for("settings.exercise_types"))
+
+@settings_bp.route("/settings/people", methods=["POST"])
+def add_person():
+    """Add a new person."""
+    name = request.form.get("name", "").strip()
+    if not name:
+        flash("Name is required.", "error")
+    else:
+        create_person(name)
+        flash(f"Person '{name}' added.", "success")
+    return redirect(url_for("settings.exercise_types"))
+
+
+@settings_bp.route("/settings/people/<int:person_id>/delete", methods=["POST"])
+def remove_person(person_id):
+    """Delete a person."""
+    if delete_person(person_id):
+        flash("Person removed.", "success")
+    else:
+        flash("Person not found.", "error")
     return redirect(url_for("settings.exercise_types"))

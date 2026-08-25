@@ -16,6 +16,19 @@
         {% endfor %}
     </select>
 
+    <!-- Person -->
+    {% if people %}
+    <label for="person">Person</label>
+    <select id="person" name="person" aria-label="Select person">
+        <option value="">-- No person --</option>
+        {% for p in people %}
+        <option value="{{ p.name }}" {% if form and form.get('person') == p.name %}selected{% endif %}>
+            {{ p.name }}
+        </option>
+        {% endfor %}
+    </select>
+    {% endif %}
+
     <!-- Date -->
     <label for="activity_date">Date</label>
     <input type="date" id="activity_date" name="activity_date"

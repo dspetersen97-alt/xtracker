@@ -27,6 +27,15 @@
     <label for="csv_file">CSV File</label>
     <input type="file" id="csv_file" name="csv_file" accept=".csv" required>
 
+    <label for="person">Person</label>
+    <select id="person" name="person" aria-label="Select person for imported activities">
+        <option value="">-- No person --</option>
+        {% for p in people %}
+        <option value="{{ p.name }}">{{ p.name }}</option>
+        {% endfor %}
+    </select>
+    <small>All imported activities will be assigned to this person.</small>
+
     <label for="source_units">Source Data Units</label>
     <select id="source_units" name="source_units" aria-label="Unit system of the source data">
         <option value="imperial" selected>Imperial (miles, feet) - Garmin default</option>

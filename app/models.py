@@ -13,7 +13,7 @@ def create_activity(activity_date, activity_type, duration_minutes=None,
                     avg_pace_sec_per_km=None, best_pace_sec_per_km=None,
                     total_ascent_m=None, total_descent_m=None, steps=None,
                     elapsed_time_minutes=None, min_elevation_m=None,
-                    max_elevation_m=None):
+                    max_elevation_m=None, person=None):
     """Create a new activity record. Returns the new activity's ID."""
     db = get_db()
     details_json = json.dumps(details) if details else "{}"
@@ -22,19 +22,19 @@ def create_activity(activity_date, activity_type, duration_minutes=None,
            duration_minutes, distance_km, calories, avg_hr, max_hr,
            avg_pace_sec_per_km, best_pace_sec_per_km, total_ascent_m,
            total_descent_m, steps, elapsed_time_minutes, min_elevation_m,
-           max_elevation_m, notes, details)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           max_elevation_m, notes, details, person)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (activity_date, activity_type, title, duration_minutes, distance_km,
          calories, avg_hr, max_hr, avg_pace_sec_per_km, best_pace_sec_per_km,
          total_ascent_m, total_descent_m, steps, elapsed_time_minutes,
-         min_elevation_m, max_elevation_m, notes, details_json),
+         min_elevation_m, max_elevation_m, notes, details_json, person),
     )
     db.commit()
     return cursor.lastrowid
 
 
 def get_activities(activity_type=None, date_from=None, date_to=None,
-                   limit=20, offset=0):
+                   person=None, limit=20, offset=0):
     """Get activities with optional filters. Returns list of Row objects."""
     db = get_db()
     query = "SELECT * FROM activities WHERE 1=1"
@@ -49,6 +49,9 @@ def get_activities(activity_type=None, date_from=None, date_to=None,
     if date_to:
         query += " AND activity_date <= ?"
         params.append(date_to)
+    if person:
+        query += " AND person = ?"
+        params.append(person)
 
     query += " ORDER BY activity_date DESC, created_at DESC"
     query += " LIMIT ? OFFSET ?"
@@ -58,7 +61,7 @@ def get_activities(activity_type=None, date_from=None, date_to=None,
     return [dict(row) for row in rows]
 
 
-def count_activities(activity_type=None, date_from=None, date_to=None):
+def count_activities(activity_type=None, date_from=None, date_to=None, person=None):
     """Count activities matching filters (for pagination)."""
     db = get_db()
     query = "SELECT COUNT(*) FROM activities WHERE 1=1"
@@ -73,6 +76,9 @@ def count_activities(activity_type=None, date_from=None, date_to=None):
     if date_to:
         query += " AND activity_date <= ?"
         params.append(date_to)
+    if person:
+        query += " AND person = ?"
+        params.append(person)
 
     return db.execute(query, params).fetchone()[0]
 
@@ -177,3 +183,31 @@ def set_units(units):
     if units not in ("metric", "imperial"):
         raise ValueError("Units must be 'metric' or 'imperial'")
     set_setting("units", units)
+
+# --- People ---
+
+
+def get_people():
+    """Get all people, ordered alphabetically."""
+    db = get_db()
+    rows = db.execute("SELECT * FROM people ORDER BY name ASC").fetchall()
+    return [dict(row) for row in rows]
+
+
+def create_person(name):
+    """Create a new person. Returns the new ID."""
+    db = get_db()
+    cursor = db.execute(
+        "INSERT OR IGNORE INTO people (name) VALUES (?)",
+        (name.strip(),),
+    )
+    db.commit()
+    return cursor.lastrowid
+
+
+def delete_person(person_id):
+    """Delete a person. Returns True if deleted."""
+    db = get_db()
+    cursor = db.execute("DELETE FROM people WHERE id = ?", (person_id,))
+    db.commit()
+    return cursor.rowcount > 0

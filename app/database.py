@@ -100,6 +100,7 @@ def _migrate(db):
         ("elapsed_time_minutes", "REAL"),
         ("min_elevation_m", "REAL"),
         ("max_elevation_m", "REAL"),
+        ("person", "TEXT"),
     ]
 
     for col_name, col_type in new_columns:
@@ -116,7 +117,7 @@ CREATE TABLE IF NOT EXISTS activities (
     activity_date TEXT NOT NULL,
     activity_type TEXT NOT NULL,
     title TEXT,
-    duration_minutes INTEGER,
+    duration_minutes REAL,
     distance_km REAL,
     calories INTEGER,
     avg_hr INTEGER,
@@ -130,7 +131,8 @@ CREATE TABLE IF NOT EXISTS activities (
     min_elevation_m REAL,
     max_elevation_m REAL,
     notes TEXT,
-    details TEXT DEFAULT '{}'
+    details TEXT DEFAULT '{}',
+    person TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_activities_date ON activities(activity_date);
@@ -148,6 +150,13 @@ CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS people (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE
+);
+
+CREATE INDEX IF NOT EXISTS idx_activities_person ON activities(person);
 """
 
 DEFAULT_EXERCISE_TYPES = [
