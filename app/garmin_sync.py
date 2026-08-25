@@ -345,8 +345,7 @@ def _backfill_weather(db, garmin):
          WHERE weather_temp_c IS NULL
            AND activity_type IN ('run', 'walk', 'hike')
            AND details LIKE '%garmin_id%'
-         ORDER BY activity_date DESC
-         LIMIT 50"""
+         ORDER BY activity_date DESC"""
     ).fetchall()
 
     if not rows:
@@ -382,7 +381,7 @@ def _backfill_weather(db, garmin):
                     filled += 1
 
             # Be polite with rate limiting
-            time.sleep(0.3)
+            time.sleep(0.15)
         except Exception as e:
             logger.warning(f"Weather backfill failed for activity {row['id']}: {e}")
             continue
