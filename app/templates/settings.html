@@ -31,9 +31,8 @@
 
 <!-- Garmin Connect -->
 <details class="settings-section" data-section="garmin">
-    <summary style="display: flex; align-items: center; gap: 0.75rem; cursor: pointer;">
-        <img src="{{ url_for('static', filename='images/garmin_connect.png') }}" alt="Garmin Connect" style="height: 28px; width: auto;">
-        <span style="font-weight: 600; font-size: 1.2rem;">Garmin Connect</span>
+    <summary style="display: flex; align-items: center; cursor: pointer; padding: 0.25rem 0;">
+        <img src="{{ url_for('static', filename='images/garmin_connect.png') }}" alt="Garmin Connect" style="height: 40px; width: auto;">
         {% if garmin_connected %}
         <small style="color: var(--pico-muted-color); margin-left: auto;">Connected</small>
         {% endif %}
