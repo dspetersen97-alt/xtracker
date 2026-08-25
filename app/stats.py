@@ -4,6 +4,11 @@ from datetime import date, timedelta
 from .database import get_db
 
 
+def _parse_date(date_str):
+    """Parse a date from activity_date which may be 'YYYY-MM-DD' or 'YYYY-MM-DD HH:MM:SS'."""
+    return date.fromisoformat(date_str.split(" ")[0])
+
+
 def _week_start(d):
     """Get Monday of the week containing date d."""
     return d - timedelta(days=d.weekday())
@@ -34,7 +39,7 @@ def workouts_per_week(weeks_back=12):
     # Build a lookup: week_start -> count
     week_counts = {w: 0 for w in weeks}
     for row in rows:
-        d = date.fromisoformat(row["activity_date"])
+        d = _parse_date(row["activity_date"])
         ws = _week_start(d)
         if ws in week_counts:
             week_counts[ws] += row["cnt"]
@@ -62,7 +67,7 @@ def distance_per_week(weeks_back=12):
 
     week_totals = {w: 0.0 for w in weeks}
     for row in rows:
-        d = date.fromisoformat(row["activity_date"])
+        d = _parse_date(row["activity_date"])
         ws = _week_start(d)
         if ws in week_totals:
             week_totals[ws] += row["total_dist"] or 0
@@ -90,7 +95,7 @@ def duration_per_week(weeks_back=12):
 
     week_totals = {w: 0 for w in weeks}
     for row in rows:
-        d = date.fromisoformat(row["activity_date"])
+        d = _parse_date(row["activity_date"])
         ws = _week_start(d)
         if ws in week_totals:
             week_totals[ws] += row["total_dur"] or 0
