@@ -1,12 +1,15 @@
 import os
 
+# Project root directory (parent of this file's directory)
+_BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 
 class Config:
     """Application configuration loaded from environment variables."""
 
     @staticmethod
     def _get_data_dir():
-        return os.environ.get("DATA_DIR", os.path.join(os.getcwd(), "data"))
+        return os.environ.get("DATA_DIR", os.path.join(_BASE_DIR, "data"))
 
     @staticmethod
     def _get_port():
