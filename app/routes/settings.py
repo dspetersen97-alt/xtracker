@@ -378,3 +378,53 @@ def garmin_backfill_weather():
     else:
         flash("No activities need weather data (all up to date or missing GPS).", "success")
     return redirect(url_for("settings.exercise_types"))
+
+
+
+@settings_bp.route("/settings/garmin/sync-all", methods=["POST"])
+def garmin_sync_all():
+    """Unified sync: activities + health data + weather backfill."""
+    person = request.form.get("person", "").strip() or None
+    days_back = request.form.get("days_back", "30").strip()
+
+    try:
+        days = int(days_back)
+    except ValueError:
+        days = 30
+
+    messages = []
+    errors = []
+
+    # 1. Sync activities
+    result = sync_activities(person_name=person, days_back=days)
+    if result["imported"] > 0:
+        msg = f"Synced {result['imported']} new activities."
+        if result.get("weather_filled"):
+            msg += f" Weather added for {result['weather_filled']}."
+        messages.append(msg)
+    if result["errors"]:
+        errors.extend(result["errors"][:3])
+
+    # 2. Sync health data (requires person)
+    if person:
+        health_result = sync_daily_health(person_name=person, days_back=days)
+        if health_result["synced"] > 0:
+            messages.append(f"Health data synced for {health_result['synced']} days.")
+        if health_result["errors"]:
+            errors.extend(health_result["errors"][:3])
+
+    # 3. Backfill weather for any remaining activities
+    weather_filled = backfill_all_weather()
+    if weather_filled > 0:
+        messages.append(f"Weather backfilled for {weather_filled} activities.")
+
+    # Flash results
+    if messages:
+        flash(" ".join(messages), "success")
+    elif not errors:
+        flash("Everything up to date. No new data to sync.", "success")
+
+    for err in errors[:5]:
+        flash(err, "error")
+
+    return redirect(url_for("settings.exercise_types"))

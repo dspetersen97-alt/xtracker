@@ -26,101 +26,79 @@
 </article>
 
 <!-- Garmin Connect -->
-<article>
-    <header><h2>Garmin Connect</h2></header>
-    {% if garmin_connected %}
-    <p>Connected as <strong>{{ garmin_email }}</strong>
-        {% if garmin_last_sync %}
-        <br><small>Last sync: {{ garmin_last_sync.strftime("%Y-%m-%d %H:%M") }}</small>
+<details {% if garmin_connected %}open{% endif %}>
+    <summary style="display: flex; align-items: center; gap: 0.75rem; cursor: pointer;">
+        <img src="{{ url_for('static', filename='images/garmin_connect.png') }}" alt="Garmin Connect" style="height: 28px; width: auto;">
+        <span style="font-weight: 600;">Garmin Connect</span>
+        {% if garmin_connected %}
+        <small style="color: var(--pico-muted-color); margin-left: auto;">Connected</small>
         {% endif %}
-    </p>
+    </summary>
 
-    <!-- Sync Now -->
-    <div class="grid" style="margin-bottom: 1rem;">
-        <div>
-            <label for="sync-person">Person</label>
-            <select id="sync-person" name="person" form="form-sync-activities">
-                <option value="">-- No person --</option>
-                {% for p in people %}
-                <option value="{{ p.name }}">{{ p.name }}</option>
-                {% endfor %}
-            </select>
+    <div style="margin-top: 1rem;">
+    {% if garmin_connected %}
+        <p><small>Linked as <strong>{{ garmin_email }}</strong>
+            {% if garmin_last_sync %} &middot; Last sync: {{ garmin_last_sync.strftime("%Y-%m-%d %H:%M") }}{% endif %}
+        </small></p>
+
+        <!-- Unified Sync -->
+        <form id="garmin-sync-form" method="POST" action="{{ url_for('settings.garmin_sync_all') }}">
+            <div class="grid">
+                <div>
+                    <label for="sync-person">Person</label>
+                    <select id="sync-person" name="person">
+                        <option value="">-- No person --</option>
+                        {% for p in people %}
+                        <option value="{{ p.name }}">{{ p.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="sync-days">Days back</label>
+                    <select id="sync-days" name="days_back">
+                        <option value="7">7 days</option>
+                        <option value="30" selected>30 days</option>
+                        <option value="90">90 days</option>
+                        <option value="365">1 year</option>
+                        <option value="1825">5 years</option>
+                        <option value="9999">All time</option>
+                    </select>
+                </div>
+            </div>
+            <button type="submit" id="sync-btn">
+                <span id="sync-btn-text">Sync</span>
+                <span id="sync-spinner" style="display: none;" aria-hidden="true"></span>
+            </button>
+        </form>
+
+        <!-- Disconnect -->
+        <div style="margin-top: 1rem; border-top: 1px solid var(--pico-muted-border-color); padding-top: 0.75rem;">
+            <div style="display: flex; gap: 0.5rem;">
+                <form method="POST" action="{{ url_for('settings.garmin_test') }}" style="margin: 0;">
+                    <button type="submit" class="outline" style="font-size: 0.85rem;">Test Connection</button>
+                </form>
+                <form method="POST" action="{{ url_for('settings.garmin_disconnect') }}"
+                      onsubmit="return confirm('Disconnect Garmin and remove credentials?');" style="margin: 0;">
+                    <button type="submit" class="secondary outline" style="font-size: 0.85rem;">Disconnect</button>
+                </form>
+            </div>
         </div>
-        <div>
-            <label for="sync-days">Days back</label>
-            <select id="sync-days" name="days_back" form="form-sync-activities">
-                <option value="7">7 days</option>
-                <option value="30" selected>30 days</option>
-                <option value="90">90 days</option>
-                <option value="365">1 year</option>
-                <option value="1825">5 years</option>
-                <option value="9999">All time</option>
-            </select>
-        </div>
-    </div>
-    <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
-        <form id="form-sync-activities" method="POST" action="{{ url_for('settings.garmin_sync') }}" style="margin: 0;">
-            <input type="hidden" name="person" id="hidden-person-activities">
-            <input type="hidden" name="days_back" id="hidden-days-activities">
-            <button type="submit">Sync Activities</button>
-        </form>
-        <form method="POST" action="{{ url_for('settings.garmin_sync_health') }}" style="margin: 0;">
-            <input type="hidden" name="person" id="hidden-person-health">
-            <input type="hidden" name="days_back" id="hidden-days-health">
-            <button type="submit" class="secondary">Sync Health Data</button>
-        </form>
-    </div>
-    <script>
-    // Sync the shared selectors to the hidden inputs in each form
-    document.addEventListener('DOMContentLoaded', function() {
-        var personSel = document.getElementById('sync-person');
-        var daysSel = document.getElementById('sync-days');
-        function syncInputs() {
-            document.getElementById('hidden-person-activities').value = personSel.value;
-            document.getElementById('hidden-days-activities').value = daysSel.value;
-            document.getElementById('hidden-person-health').value = personSel.value;
-            document.getElementById('hidden-days-health').value = daysSel.value;
-        }
-        personSel.addEventListener('change', syncInputs);
-        daysSel.addEventListener('change', syncInputs);
-        syncInputs();
-    });
-    </script>
-
-    <!-- Weather Backfill -->
-    <form method="POST" action="{{ url_for('settings.garmin_backfill_weather') }}" style="margin-bottom: 1rem;">
-        <button type="submit" class="outline contrast">Backfill Weather Data</button>
-        <small>Fetches historical weather for activities with GPS but no weather info.</small>
-    </form>
-
-    <!-- Test / Disconnect -->
-    <div style="display: flex; gap: 0.5rem;">
-        <form method="POST" action="{{ url_for('settings.garmin_test') }}" style="margin: 0;">
-            <button type="submit" class="outline">Test Connection</button>
-        </form>
-        <form method="POST" action="{{ url_for('settings.garmin_disconnect') }}"
-              onsubmit="return confirm('Disconnect Garmin and remove credentials?');" style="margin: 0;">
-            <button type="submit" class="secondary outline">Disconnect</button>
-        </form>
-    </div>
 
     {% else %}
-    <p>Link your Garmin Connect account to automatically sync activities.</p>
-    <form method="POST" action="{{ url_for('settings.garmin_connect') }}">
-        <label for="garmin_email">Garmin Email</label>
-        <input type="email" id="garmin_email" name="garmin_email" required
-               placeholder="your@email.com" autocomplete="email">
-
-        <label for="garmin_password">Garmin Password</label>
-        <input type="password" id="garmin_password" name="garmin_password" required
-               placeholder="Your Garmin password" autocomplete="current-password">
-
-        <small>Your credentials are encrypted before storage and never logged or displayed.</small>
-        <button type="submit" style="margin-top: 0.5rem;">Connect</button>
-    </form>
+        <p>Link your Garmin Connect account to sync activities and health data.</p>
+        <form method="POST" action="{{ url_for('settings.garmin_connect') }}">
+            <label for="garmin_email">Garmin Email</label>
+            <input type="email" id="garmin_email" name="garmin_email" required
+                   placeholder="your@email.com" autocomplete="email">
+            <label for="garmin_password">Garmin Password</label>
+            <input type="password" id="garmin_password" name="garmin_password" required
+                   placeholder="Your Garmin password" autocomplete="current-password">
+            <small>Credentials are encrypted before storage and never displayed.</small>
+            <button type="submit" style="margin-top: 0.5rem;">Connect</button>
+        </form>
     {% endif %}
-</article>
-
+    </div>
+</details>
 <!-- People -->
 <article>
     <header><h2>People</h2></header>
@@ -258,4 +236,21 @@
         </tbody>
     </table>
 </figure>
+{% endblock %}
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var syncForm = document.getElementById('garmin-sync-form');
+    if (syncForm) {
+        syncForm.addEventListener('submit', function() {
+            var btn = document.getElementById('sync-btn');
+            var text = document.getElementById('sync-btn-text');
+            var spinner = document.getElementById('sync-spinner');
+            btn.setAttribute('aria-busy', 'true');
+            text.textContent = 'Syncing...';
+            spinner.style.display = 'inline-block';
+        });
+    }
+});
+</script>
 {% endblock %}
