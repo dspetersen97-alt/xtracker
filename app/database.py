@@ -1,3 +1,4 @@
+import os
 import sqlite3
 from flask import g, current_app
 
@@ -26,7 +27,11 @@ def init_db(app):
     """Initialize the database schema and seed data."""
     app.teardown_appcontext(close_db)
 
-    db = sqlite3.connect(app.config["DB_PATH"])
+    # Ensure the directory for the DB file exists
+    db_path = app.config["DB_PATH"]
+    os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
+
+    db = sqlite3.connect(db_path)
     db.execute("PRAGMA journal_mode=WAL")
     db.execute("PRAGMA foreign_keys=ON")
 
