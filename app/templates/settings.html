@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Settings — xtracker{% endblock %}
+
+{% block content %}
+<h1>Settings</h1>
+
+<h2>Exercise Types</h2>
+
+<a href="{{ url_for('settings.new_exercise_type') }}" role="button" class="outline" style="margin-bottom: 1rem; display: inline-block;">
+    + Add Custom Type
+</a>
+
+<figure>
+    <table role="grid">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Category</th>
+                <th>Fields</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for et in exercise_types %}
+            <tr>
+                <td>
+                    <strong>{{ et.name | capitalize }}</strong>
+                    {% if et.is_default %}
+                    <small>(default)</small>
+                    {% endif %}
+                </td>
+                <td>
+                    <span class="badge badge-{{ et.category }}">{{ et.category | capitalize }}</span>
+                </td>
+                <td>
+                    <small>{{ et.fields | replace('[', '') | replace(']', '') | replace('"', '') }}</small>
+                </td>
+                <td>
+                    {% if not et.is_default %}
+                    <form method="POST" action="{{ url_for('settings.delete_type', type_id=et.id) }}"
+                          onsubmit="return confirm('Delete this exercise type? This cannot be undone.');"
+                          style="display: inline;">
+                        <button type="submit" class="secondary outline" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">
+                            Delete
+                        </button>
+                    </form>
+                    {% else %}
+                    <small>—</small>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</figure>
+{% endblock %}

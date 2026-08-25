@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}Log Workout — xtracker{% endblock %}
+
+{% block content %}
+<h1>Log Workout</h1>
+
+<form method="POST" action="{{ url_for('activities.log_workout_submit') }}">
+    <!-- Activity Type -->
+    <label for="activity_type">Activity Type</label>
+    <select id="activity_type" name="activity_type" required aria-label="Select activity type">
+        <option value="" disabled {% if not form or not form.get('activity_type') %}selected{% endif %}>Choose activity type...</option>
+        {% for et in exercise_types %}
+        <option value="{{ et.name }}" {% if form and form.get('activity_type') == et.name %}selected{% endif %}>
+            {{ et.name | capitalize }}
+        </option>
+        {% endfor %}
+    </select>
+
+    <!-- Date -->
+    <label for="activity_date">Date</label>
+    <input type="date" id="activity_date" name="activity_date"
+           value="{{ form.get('activity_date', today) if form else today }}" required>
+
+    <!-- Duration (all types) -->
+    <label for="duration_minutes">Duration (minutes)</label>
+    <input type="number" id="duration_minutes" name="duration_minutes" min="0"
+           placeholder="e.g. 45"
+           value="{{ form.get('duration_minutes', '') if form else '' }}">
+
+    <!-- Distance (outdoor + cardio types) -->
+    <div id="field-distance" class="type-field" data-types="hike,walk,run,cardio">
+        <label for="distance_km">Distance (km)</label>
+        <input type="number" id="distance_km" name="distance_km" min="0" step="0.01"
+               placeholder="e.g. 5.5"
+               value="{{ form.get('distance_km', '') if form else '' }}">
+    </div>
+
+    <!-- Elevation Gain (outdoor types) -->
+    <div id="field-elevation" class="type-field" data-types="hike,walk,run">
+        <label for="elevation_gain">Elevation Gain (meters)</label>
+        <input type="number" id="elevation_gain" name="elevation_gain" min="0" step="1"
+               placeholder="e.g. 300"
+               value="{{ form.get('elevation_gain', '') if form else '' }}">
+    </div>
+
+    <!-- Machine (cardio) -->
+    <div id="field-machine" class="type-field" data-types="cardio">
+        <label for="machine">Machine / Equipment</label>
+        <input type="text" id="machine" name="machine"
+               placeholder="e.g. Treadmill, Rower, Elliptical"
+               value="{{ form.get('machine', '') if form else '' }}">
+    </div>
+
+    <!-- Heart Rate (cardio) -->
+    <div id="field-heartrate" class="type-field" data-types="cardio">
+        <label for="heart_rate">Avg Heart Rate (bpm)</label>
+        <input type="number" id="heart_rate" name="heart_rate" min="0"
+               placeholder="e.g. 145"
+               value="{{ form.get('heart_rate', '') if form else '' }}">
+    </div>
+
+    <!-- Calories -->
+    <div id="field-calories" class="type-field" data-types="cardio,hike,walk,run">
+        <label for="calories">Calories Burned</label>
+        <input type="number" id="calories" name="calories" min="0"
+               placeholder="e.g. 350"
+               value="{{ form.get('calories', '') if form else '' }}">
+    </div>
+
+    <!-- Strength Exercises -->
+    <div id="field-exercises" class="type-field" data-types="strength">
+        <label>Exercises</label>
+        <div id="exercise-list">
+            <div class="exercise-row">
+                <input type="text" name="exercise_name[]" placeholder="Exercise name" aria-label="Exercise name">
+                <input type="number" name="exercise_sets[]" placeholder="Sets" min="0" aria-label="Sets">
+                <input type="number" name="exercise_reps[]" placeholder="Reps" min="0" aria-label="Reps">
+                <input type="number" name="exercise_weight[]" placeholder="Weight (kg)" min="0" step="0.5" aria-label="Weight in kg">
+                <button type="button" class="remove-exercise" aria-label="Remove exercise" title="Remove">&times;</button>
+            </div>
+        </div>
+        <button type="button" id="add-exercise" class="secondary outline">+ Add Exercise</button>
+    </div>
+
+    <!-- Notes (all types) -->
+    <label for="notes">Notes</label>
+    <textarea id="notes" name="notes" rows="3" placeholder="How did it feel? Any observations...">{{ form.get('notes', '') if form else '' }}</textarea>
+
+    <!-- Submit -->
+    <button type="submit">Log Workout</button>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const typeSelect = document.getElementById('activity_type');
+    const typeFields = document.querySelectorAll('.type-field');
+
+    function updateFieldVisibility() {
+        const selectedType = typeSelect.value;
+        typeFields.forEach(function(field) {
+            const types = field.getAttribute('data-types').split(',');
+            if (types.includes(selectedType)) {
+                field.style.display = '';
+            } else {
+                field.style.display = 'none';
+            }
+        });
+    }
+
+    typeSelect.addEventListener('change', updateFieldVisibility);
+    updateFieldVisibility();
+
+    // Strength exercise rows
+    const exerciseList = document.getElementById('exercise-list');
+    const addBtn = document.getElementById('add-exercise');
+
+    if (addBtn) {
+        addBtn.addEventListener('click', function() {
+            const row = document.createElement('div');
+            row.className = 'exercise-row';
+            row.innerHTML = `
+                <input type="text" name="exercise_name[]" placeholder="Exercise name" aria-label="Exercise name">
+                <input type="number" name="exercise_sets[]" placeholder="Sets" min="0" aria-label="Sets">
+                <input type="number" name="exercise_reps[]" placeholder="Reps" min="0" aria-label="Reps">
+                <input type="number" name="exercise_weight[]" placeholder="Weight (kg)" min="0" step="0.5" aria-label="Weight in kg">
+                <button type="button" class="remove-exercise" aria-label="Remove exercise" title="Remove">&times;</button>
+            `;
+            exerciseList.appendChild(row);
+        });
+    }
+
+    // Remove exercise row (event delegation)
+    if (exerciseList) {
+        exerciseList.addEventListener('click', function(e) {
+            if (e.target.classList.contains('remove-exercise')) {
+                const rows = exerciseList.querySelectorAll('.exercise-row');
+                if (rows.length > 1) {
+                    e.target.closest('.exercise-row').remove();
+                }
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

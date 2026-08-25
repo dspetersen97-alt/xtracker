@@ -1,0 +1,47 @@
+import os
+from flask import Flask, render_template
+
+from .config import get_config
+
+
+def create_app(config_overrides=None):
+    app = Flask(__name__)
+
+    # Load config from environment
+    config = get_config()
+    app.config.update(config)
+
+    # Apply any overrides (useful for testing)
+    if config_overrides:
+        app.config.update(config_overrides)
+
+    app.secret_key = app.config["SECRET_KEY"]
+
+    # Ensure data directory exists
+    os.makedirs(app.config["DATA_DIR"], exist_ok=True)
+
+    # Initialize database
+    from .database import init_db
+    with app.app_context():
+        init_db(app)
+
+    # Register blueprints
+    from .routes.main import main_bp
+    from .routes.activities import activities_bp
+    from .routes.progress import progress_bp
+    from .routes.settings import settings_bp
+    app.register_blueprint(main_bp)
+    app.register_blueprint(activities_bp)
+    app.register_blueprint(progress_bp)
+    app.register_blueprint(settings_bp)
+
+    # Error handlers
+    @app.errorhandler(404)
+    def not_found(e):
+        return render_template("errors/404.html"), 404
+
+    @app.errorhandler(500)
+    def server_error(e):
+        return render_template("errors/500.html"), 500
+
+    return app

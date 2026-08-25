@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}{{ activity.activity_type | capitalize }} — {{ activity.activity_date }} — xtracker{% endblock %}
+
+{% block content %}
+<nav aria-label="Breadcrumb">
+    <ul>
+        <li><a href="{{ url_for('activities.history') }}">History</a></li>
+        <li>{{ activity.activity_type | capitalize }} — {{ activity.activity_date }}</li>
+    </ul>
+</nav>
+
+<article>
+    <header>
+        <h2>
+            <span class="badge badge-{{ 'outdoor' if activity.activity_type in ('hike', 'walk', 'run') else ('strength' if activity.activity_type == 'strength' else 'cardio') }}">
+                {{ activity.activity_type | capitalize }}
+            </span>
+            {{ activity.activity_date }}
+        </h2>
+    </header>
+
+    <dl class="detail-grid">
+        <dt>Date</dt>
+        <dd>{{ activity.activity_date }}</dd>
+
+        {% if activity.duration_minutes %}
+        <dt>Duration</dt>
+        <dd>{{ activity.duration_minutes }} minutes</dd>
+        {% endif %}
+
+        {% if activity.distance_km %}
+        <dt>Distance</dt>
+        <dd>{{ "%.2f" | format(activity.distance_km) }} km</dd>
+        {% endif %}
+
+        {% if activity.calories %}
+        <dt>Calories</dt>
+        <dd>{{ activity.calories }}</dd>
+        {% endif %}
+
+        {% if activity.details_parsed.get('elevation_gain_m') %}
+        <dt>Elevation Gain</dt>
+        <dd>{{ activity.details_parsed.elevation_gain_m }} m</dd>
+        {% endif %}
+
+        {% if activity.details_parsed.get('machine') %}
+        <dt>Machine</dt>
+        <dd>{{ activity.details_parsed.machine }}</dd>
+        {% endif %}
+
+        {% if activity.details_parsed.get('heart_rate_avg') %}
+        <dt>Avg Heart Rate</dt>
+        <dd>{{ activity.details_parsed.heart_rate_avg }} bpm</dd>
+        {% endif %}
+
+        {% if activity.notes %}
+        <dt>Notes</dt>
+        <dd>{{ activity.notes }}</dd>
+        {% endif %}
+
+        <dt>Logged</dt>
+        <dd>{{ activity.created_at }}</dd>
+    </dl>
+
+    {% if activity.details_parsed.get('exercises') %}
+    <h3>Exercises</h3>
+    <figure>
+        <table role="grid">
+            <thead>
+                <tr>
+                    <th>Exercise</th>
+                    <th>Sets</th>
+                    <th>Reps</th>
+                    <th>Weight (kg)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ex in activity.details_parsed.exercises %}
+                <tr>
+                    <td>{{ ex.name }}</td>
+                    <td>{{ ex.get('sets', '-') }}</td>
+                    <td>{{ ex.get('reps', '-') }}</td>
+                    <td>{{ ex.get('weight_kg', '-') }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </figure>
+    {% endif %}
+
+    <footer>
+        <form method="POST" action="{{ url_for('activities.activity_delete', activity_id=activity.id) }}"
+              onsubmit="return confirm('Are you sure you want to delete this workout?');"
+              style="display: inline;">
+            <button type="submit" class="secondary outline">Delete</button>
+        </form>
+        <a href="{{ url_for('activities.history') }}" role="button" class="outline">Back to History</a>
+    </footer>
+</article>
+{% endblock %}

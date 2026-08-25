@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}xtracker{% endblock %}</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <header class="container">
+        <nav>
+            <ul>
+                <li><a href="{{ url_for('main.index') }}"><strong>xtracker</strong></a></li>
+            </ul>
+            <ul>
+                <li><a href="{{ url_for('main.index') }}">Home</a></li>
+                <li><a href="{{ url_for('activities.log_workout') }}">Log</a></li>
+                <li><a href="{{ url_for('activities.history') }}">History</a></li>
+                <li><a href="{{ url_for('progress.dashboard') }}">Progress</a></li>
+                <li><a href="{{ url_for('settings.exercise_types') }}">Settings</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <article aria-label="Notification" role="alert" {% if category == 'error' %}data-theme="invalid"{% endif %}>
+                        {{ message }}
+                    </article>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="container">
+        <small>xtracker — Exercise Tracker</small>
+    </footer>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

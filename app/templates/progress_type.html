@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+{% block title %}{{ activity_type | capitalize }} Progress — xtracker{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block content %}
+<nav aria-label="Breadcrumb">
+    <ul>
+        <li><a href="{{ url_for('progress.dashboard') }}">Progress</a></li>
+        <li>{{ activity_type | capitalize }}</li>
+    </ul>
+</nav>
+
+<h1>{{ activity_type | capitalize }} — Progress</h1>
+
+<!-- Time range toggle -->
+<nav>
+    <ul>
+        <li><a href="{{ url_for('progress.type_detail', activity_type=activity_type, weeks='4', exercise=exercise_name) }}"
+               {% if current_weeks == '4' %}aria-current="page"{% endif %}>4 Weeks</a></li>
+        <li><a href="{{ url_for('progress.type_detail', activity_type=activity_type, weeks='12', exercise=exercise_name) }}"
+               {% if current_weeks == '12' %}aria-current="page"{% endif %}>12 Weeks</a></li>
+        <li><a href="{{ url_for('progress.type_detail', activity_type=activity_type, weeks='26', exercise=exercise_name) }}"
+               {% if current_weeks == '26' %}aria-current="page"{% endif %}>6 Months</a></li>
+    </ul>
+</nav>
+
+{% if stats.type == 'strength' %}
+<!-- Strength: Exercise selector + progression charts -->
+
+<article>
+    <header><h3>Duration per Session</h3></header>
+    <div class="chart-container">
+        <canvas id="durationChart" aria-label="Line chart showing duration per strength session"></canvas>
+    </div>
+</article>
+
+<article>
+    <header><h3>Exercise Progression</h3></header>
+    {% if stats.exercises %}
+    <form method="GET" action="{{ url_for('progress.type_detail', activity_type='strength') }}" class="filter-form">
+        <input type="hidden" name="weeks" value="{{ current_weeks }}">
+        <div>
+            <label for="exercise-select">Select Exercise</label>
+            <select id="exercise-select" name="exercise" aria-label="Select exercise to view progression">
+                <option value="">Choose an exercise...</option>
+                {% for ex in stats.exercises %}
+                <option value="{{ ex }}" {% if exercise_name == ex %}selected{% endif %}>{{ ex | capitalize }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <button type="submit" class="outline">View</button>
+        </div>
+    </form>
+
+    {% if exercise_data %}
+    <h4>{{ exercise_name | capitalize }}</h4>
+    {% if exercise_data.labels %}
+    <div class="chart-container">
+        <canvas id="weightChart" aria-label="Line chart showing weight progression for {{ exercise_name }}"></canvas>
+    </div>
+    <div class="chart-container">
+        <canvas id="volumeChart" aria-label="Line chart showing volume progression for {{ exercise_name }}"></canvas>
+    </div>
+    {% else %}
+    <p>No data found for this exercise in the selected time range.</p>
+    {% endif %}
+    {% endif %}
+    {% else %}
+    <p>No strength exercises logged yet. <a href="{{ url_for('activities.log_workout') }}">Log a strength workout</a> to see progression charts.</p>
+    {% endif %}
+</article>
+
+{% else %}
+<!-- Distance-based types: distance, pace, duration charts -->
+
+{% if stats.distance.data %}
+<article>
+    <header><h3>Distance per Session (km)</h3></header>
+    <div class="chart-container">
+        <canvas id="distanceChart" aria-label="Line chart showing distance per session over time"></canvas>
+    </div>
+</article>
+{% endif %}
+
+{% if stats.pace.data %}
+<article>
+    <header><h3>Pace (min/km)</h3></header>
+    <div class="chart-container">
+        <canvas id="paceChart" aria-label="Line chart showing pace over time"></canvas>
+    </div>
+</article>
+{% endif %}
+
+{% if stats.duration.data %}
+<article>
+    <header><h3>Duration per Session (minutes)</h3></header>
+    <div class="chart-container">
+        <canvas id="durationChart" aria-label="Line chart showing duration per session over time"></canvas>
+    </div>
+</article>
+{% endif %}
+
+{% if not stats.distance.data and not stats.duration.data %}
+<article>
+    <p>No {{ activity_type }} activities logged yet. <a href="{{ url_for('activities.log_workout') }}">Log a workout</a> to see progress charts.</p>
+</article>
+{% endif %}
+
+{% endif %}
+
+<a href="{{ url_for('progress.dashboard') }}" role="button" class="outline">Back to Dashboard</a>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const lineOptions = {
+        responsive: true,
+        scales: { y: { beginAtZero: true } },
+        plugins: { legend: { display: false } }
+    };
+
+    {% if stats.type == 'strength' %}
+
+    // Duration per strength session
+    {% if stats.duration.data %}
+    new Chart(document.getElementById('durationChart'), {
+        type: 'line',
+        data: {
+            labels: {{ stats.duration.labels | tojson }},
+            datasets: [{
+                label: 'Duration (min)',
+                data: {{ stats.duration.data | tojson }},
+                borderColor: 'rgba(255, 206, 86, 1)',
+                backgroundColor: 'rgba(255, 206, 86, 0.2)',
+                fill: true,
+                tension: 0.3
+            }]
+        },
+        options: lineOptions
+    });
+    {% endif %}
+
+    {% if exercise_data and exercise_data.labels %}
+    // Weight progression
+    new Chart(document.getElementById('weightChart'), {
+        type: 'line',
+        data: {
+            labels: {{ exercise_data.labels | tojson }},
+            datasets: [{
+                label: 'Max Weight (kg)',
+                data: {{ exercise_data.weight | tojson }},
+                borderColor: 'rgba(21, 101, 192, 1)',
+                backgroundColor: 'rgba(21, 101, 192, 0.2)',
+                fill: true,
+                tension: 0.3
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: { y: { beginAtZero: false } },
+            plugins: { legend: { display: true } }
+        }
+    });
+
+    // Volume progression
+    new Chart(document.getElementById('volumeChart'), {
+        type: 'line',
+        data: {
+            labels: {{ exercise_data.labels | tojson }},
+            datasets: [{
+                label: 'Volume (sets x reps x weight)',
+                data: {{ exercise_data.volume | tojson }},
+                borderColor: 'rgba(156, 39, 176, 1)',
+                backgroundColor: 'rgba(156, 39, 176, 0.2)',
+                fill: true,
+                tension: 0.3
+            }]
+        },
+        options: lineOptions
+    });
+    {% endif %}
+
+    {% else %}
+
+    // Distance per session
+    {% if stats.distance.data %}
+    new Chart(document.getElementById('distanceChart'), {
+        type: 'line',
+        data: {
+            labels: {{ stats.distance.labels | tojson }},
+            datasets: [{
+                label: 'Distance (km)',
+                data: {{ stats.distance.data | tojson }},
+                borderColor: 'rgba(75, 192, 192, 1)',
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                fill: true,
+                tension: 0.3
+            }]
+        },
+        options: lineOptions
+    });
+    {% endif %}
+
+    // Pace over time
+    {% if stats.pace.data %}
+    new Chart(document.getElementById('paceChart'), {
+        type: 'line',
+        data: {
+            labels: {{ stats.pace.labels | tojson }},
+            datasets: [{
+                label: 'Pace (min/km)',
+                data: {{ stats.pace.data | tojson }},
+                borderColor: 'rgba(255, 99, 132, 1)',
+                backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                fill: true,
+                tension: 0.3
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: { y: { beginAtZero: false, reverse: true } },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(ctx) {
+                            return ctx.parsed.y.toFixed(2) + ' min/km (lower is faster)';
+                        }
+                    }
+                }
+            }
+        }
+    });
+    {% endif %}
+
+    // Duration per session
+    {% if stats.duration.data %}
+    new Chart(document.getElementById('durationChart'), {
+        type: 'line',
+        data: {
+            labels: {{ stats.duration.labels | tojson }},
+            datasets: [{
+                label: 'Duration (min)',
+                data: {{ stats.duration.data | tojson }},
+                borderColor: 'rgba(255, 206, 86, 1)',
+                backgroundColor: 'rgba(255, 206, 86, 0.2)',
+                fill: true,
+                tension: 0.3
+            }]
+        },
+        options: lineOptions
+    });
+    {% endif %}
+
+    {% endif %}
+});
+</script>
+{% endblock %}
