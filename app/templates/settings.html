@@ -29,23 +29,86 @@
 <article>
     <header><h2>People</h2></header>
     {% if people %}
-    <ul>
-        {% for p in people %}
-        <li style="display: flex; justify-content: space-between; align-items: center;">
-            {{ p.name }}
-            <form method="POST" action="{{ url_for('settings.remove_person', person_id=p.id) }}"
-                  onsubmit="return confirm('Remove this person?');" style="display: inline; margin: 0;">
-                <button type="submit" class="secondary outline" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">Remove</button>
-            </form>
-        </li>
-        {% endfor %}
-    </ul>
+    {% for p in people %}
+    <details>
+        <summary><strong>{{ p.name }}</strong>
+            {% if p.weight_kg %} &middot; {{ p.weight_kg }}kg{% endif %}
+            {% if p.sex %} &middot; {{ p.sex | capitalize }}{% endif %}
+        </summary>
+        <form method="POST" action="{{ url_for('settings.edit_person', person_id=p.id) }}">
+            <div class="grid">
+                <div>
+                    <label>Name</label>
+                    <input type="text" name="name" value="{{ p.name }}" required>
+                </div>
+                <div>
+                    <label>Sex</label>
+                    <select name="sex">
+                        <option value="">--</option>
+                        <option value="male" {% if p.sex == 'male' %}selected{% endif %}>Male</option>
+                        <option value="female" {% if p.sex == 'female' %}selected{% endif %}>Female</option>
+                    </select>
+                </div>
+            </div>
+            <div class="grid">
+                <div>
+                    <label>Weight (kg)</label>
+                    <input type="number" name="weight_kg" step="0.1" min="0" value="{{ p.weight_kg or '' }}">
+                </div>
+                <div>
+                    <label>Height (cm)</label>
+                    <input type="number" name="height_cm" step="0.1" min="0" value="{{ p.height_cm or '' }}">
+                </div>
+                <div>
+                    <label>Birth Year</label>
+                    <input type="number" name="birth_year" min="1900" max="2025" value="{{ p.birth_year or '' }}">
+                </div>
+            </div>
+            <div style="display: flex; gap: 0.5rem;">
+                <button type="submit" class="outline">Save Profile</button>
+                <form method="POST" action="{{ url_for('settings.remove_person', person_id=p.id) }}"
+                      onsubmit="return confirm('Remove this person and their profile?');" style="display: inline; margin: 0;">
+                    <button type="submit" class="secondary outline">Remove</button>
+                </form>
+            </div>
+        </form>
+    </details>
+    {% endfor %}
     {% else %}
     <p><small>No people added yet.</small></p>
     {% endif %}
-    <form method="POST" action="{{ url_for('settings.add_person') }}" style="display: flex; gap: 0.5rem; align-items: end;">
-        <input type="text" name="name" placeholder="Name" required style="margin-bottom: 0;">
-        <button type="submit" class="outline" style="white-space: nowrap;">Add Person</button>
+    <hr>
+    <h4>Add Person</h4>
+    <form method="POST" action="{{ url_for('settings.add_person') }}">
+        <div class="grid">
+            <div>
+                <label>Name</label>
+                <input type="text" name="name" placeholder="Name" required>
+            </div>
+            <div>
+                <label>Sex</label>
+                <select name="sex">
+                    <option value="">--</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                </select>
+            </div>
+        </div>
+        <div class="grid">
+            <div>
+                <label>Weight (kg)</label>
+                <input type="number" name="weight_kg" step="0.1" min="0" placeholder="e.g. 75">
+            </div>
+            <div>
+                <label>Height (cm)</label>
+                <input type="number" name="height_cm" step="0.1" min="0" placeholder="e.g. 178">
+            </div>
+            <div>
+                <label>Birth Year</label>
+                <input type="number" name="birth_year" min="1900" max="2025" placeholder="e.g. 1990">
+            </div>
+        </div>
+        <button type="submit" class="outline">Add Person</button>
     </form>
 </article>
 

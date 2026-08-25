@@ -109,6 +109,30 @@ def _migrate(db):
 
     # Create indexes for new columns (safe to run after columns exist)
     db.execute("CREATE INDEX IF NOT EXISTS idx_activities_person ON activities(person)")
+
+    # Migrate activities table: add score and weather columns
+    if "score" not in existing_cols:
+        db.execute("ALTER TABLE activities ADD COLUMN score REAL")
+    if "weather_temp_c" not in existing_cols:
+        db.execute("ALTER TABLE activities ADD COLUMN weather_temp_c REAL")
+    if "weather_humidity" not in existing_cols:
+        db.execute("ALTER TABLE activities ADD COLUMN weather_humidity REAL")
+    if "weather_multiplier" not in existing_cols:
+        db.execute("ALTER TABLE activities ADD COLUMN weather_multiplier REAL")
+
+    # Migrate people table: add profile columns
+    people_cursor = db.execute("PRAGMA table_info(people)")
+    people_cols = {row[1] for row in people_cursor.fetchall()}
+    people_new_cols = [
+        ("weight_kg", "REAL"),
+        ("height_cm", "REAL"),
+        ("sex", "TEXT"),
+        ("birth_year", "INTEGER"),
+    ]
+    for col_name, col_type in people_new_cols:
+        if col_name not in people_cols:
+            db.execute(f"ALTER TABLE people ADD COLUMN {col_name} {col_type}")
+
     db.commit()
 
 
@@ -134,7 +158,11 @@ CREATE TABLE IF NOT EXISTS activities (
     max_elevation_m REAL,
     notes TEXT,
     details TEXT DEFAULT '{}',
-    person TEXT
+    person TEXT,
+    score REAL,
+    weather_temp_c REAL,
+    weather_humidity REAL,
+    weather_multiplier REAL
 );
 
 CREATE INDEX IF NOT EXISTS idx_activities_date ON activities(activity_date);
@@ -155,7 +183,11 @@ CREATE TABLE IF NOT EXISTS settings (
 
 CREATE TABLE IF NOT EXISTS people (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL UNIQUE
+    name TEXT NOT NULL UNIQUE,
+    weight_kg REAL,
+    height_cm REAL,
+    sex TEXT,
+    birth_year INTEGER
 );
 
 """

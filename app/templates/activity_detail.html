@@ -143,6 +143,30 @@
     </figure>
     {% endif %}
 
+    {% if activity.score %}
+    <h3>Score</h3>
+    <article style="background: var(--pico-card-background-color);">
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <span style="font-size: 2rem; font-weight: 700; color: var(--pico-primary);">{{ activity.score }}</span>
+            <span>points</span>
+        </div>
+        {% if activity.weather_multiplier and activity.weather_multiplier > 1.0 %}
+        <dl class="detail-grid" style="margin-top: 0.5rem;">
+            <dt>Weather Multiplier</dt>
+            <dd>{{ activity.weather_multiplier }}x</dd>
+            {% if activity.weather_temp_c is not none %}
+            <dt>Temperature</dt>
+            <dd>{% if units == 'imperial' %}{{ (activity.weather_temp_c * 9/5 + 32) | round(0) | int }}&deg;F{% else %}{{ activity.weather_temp_c | round(1) }}&deg;C{% endif %}</dd>
+            {% endif %}
+            {% if activity.weather_humidity is not none %}
+            <dt>Humidity</dt>
+            <dd>{{ activity.weather_humidity | round(0) | int }}%</dd>
+            {% endif %}
+        </dl>
+        {% endif %}
+    </article>
+    {% endif %}
+
     <footer>
         <form method="POST" action="{{ url_for('activities.activity_delete', activity_id=activity.id) }}"
               onsubmit="return confirm('Are you sure you want to delete this workout?');"

@@ -3,6 +3,7 @@ import csv
 import io
 
 from .database import get_db
+from .scoring import score_activity
 from .units import (
     feet_to_meters,
     miles_to_km,
@@ -78,7 +79,45 @@ def import_garmin_csv(file_content, source_units="imperial", person=None):
             skipped += 1
 
     db.commit()
+
+    # Score imported activities
+    if person and imported > 0:
+        _score_recent_imports(db, person, imported)
+        db.commit()
+
     return {"imported": imported, "skipped": skipped, "errors": errors}
+
+
+def _score_recent_imports(db, person, count):
+    """Score the most recently imported activities for the given person."""
+    from .models import get_person_by_name
+    person_profile = get_person_by_name(person)
+    if not person_profile:
+        return
+
+    rows = db.execute(
+        """SELECT id, activity_type, distance_km, total_ascent_m,
+               duration_minutes, avg_hr FROM activities
+         WHERE person = ? ORDER BY id DESC LIMIT ?""",
+        (person, count),
+    ).fetchall()
+
+    for row in rows:
+        activity_data = {
+            "activity_type": row[1],
+            "distance_km": row[2],
+            "total_ascent_m": row[3],
+            "duration_minutes": row[4],
+            "avg_hr": row[5],
+            "weather_temp_c": None,
+            "weather_humidity": None,
+        }
+        result = score_activity(activity_data, person_profile)
+        if result:
+            db.execute(
+                "UPDATE activities SET score = ? WHERE id = ?",
+                (result["final_score"], row[0]),
+            )
 
 
 def _import_row(db, row, source_units, person=None):

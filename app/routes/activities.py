@@ -1,4 +1,4 @@
-import json
+﻿import json
 from datetime import date
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
@@ -11,8 +11,11 @@ from ..models import (
     get_activity_by_id,
     get_exercise_types,
     get_people,
+    get_person_by_name,
     get_units,
+    update_activity_score,
 )
+from ..scoring import score_activity
 from ..units import convert_activity_for_display
 
 activities_bp = Blueprint("activities", __name__)
@@ -23,8 +26,11 @@ def log_workout():
     """Show the log workout form."""
     exercise_types = get_exercise_types()
     people = get_people()
+    units = get_units()
     today = date.today().isoformat()
-    return render_template("log.html", exercise_types=exercise_types, people=people, today=today)
+    units_label = "F" if units == "imperial" else "C"
+    return render_template("log.html", exercise_types=exercise_types, people=people,
+                           today=today, units=units, units_label=units_label)
 
 
 @activities_bp.route("/log", methods=["POST"])
@@ -141,12 +147,39 @@ def log_workout_submit():
     if errors:
         for error in errors:
             flash(error, "error")
+        units = get_units()
+        units_label = "F" if units == "imperial" else "C"
         return render_template(
             "log.html",
             exercise_types=exercise_types,
+            people=get_people(),
             today=today,
             form=request.form,
+            units=units,
+            units_label=units_label,
         ), 422
+
+    # Parse weather data
+    weather_temp_raw = request.form.get("weather_temp", "").strip()
+    weather_humidity_raw = request.form.get("weather_humidity", "").strip()
+
+    weather_temp_c = None
+    weather_humidity = None
+    if weather_temp_raw:
+        try:
+            temp_val = float(weather_temp_raw)
+            units = get_units()
+            if units == "imperial":
+                weather_temp_c = (temp_val - 32) * 5 / 9  # Convert F to C
+            else:
+                weather_temp_c = temp_val
+        except ValueError:
+            pass
+    if weather_humidity_raw:
+        try:
+            weather_humidity = float(weather_humidity_raw)
+        except ValueError:
+            pass
 
     person_name = request.form.get("person", "").strip() or None
     activity_id = create_activity(
@@ -159,6 +192,28 @@ def log_workout_submit():
         details=details if details else None,
         person=person_name,
     )
+
+    # Calculate and store score
+    if activity_type in ("run", "walk", "hike") and activity_id:
+        person_profile = get_person_by_name(person_name) if person_name else None
+        activity_data = {
+            "activity_type": activity_type,
+            "distance_km": distance_val,
+            "total_ascent_m": details.get("elevation_gain_m") if details else None,
+            "duration_minutes": duration_val,
+            "avg_hr": None,  # not captured in manual log form currently
+            "weather_temp_c": weather_temp_c,
+            "weather_humidity": weather_humidity,
+        }
+        result = score_activity(activity_data, person_profile)
+        if result:
+            update_activity_score(
+                activity_id,
+                score=result["final_score"],
+                weather_temp_c=weather_temp_c,
+                weather_humidity=weather_humidity,
+                weather_multiplier=result["weather_multiplier"],
+            )
 
     flash("Workout logged successfully!", "success")
     return redirect(url_for("activities.history"))

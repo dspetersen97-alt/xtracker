@@ -194,15 +194,51 @@ def get_people():
     return [dict(row) for row in rows]
 
 
-def create_person(name):
-    """Create a new person. Returns the new ID."""
+def get_person_by_name(name):
+    """Get a person by name. Returns dict or None."""
+    db = get_db()
+    row = db.execute("SELECT * FROM people WHERE name = ?", (name,)).fetchone()
+    if row is None:
+        return None
+    return dict(row)
+
+
+def create_person(name, weight_kg=None, height_cm=None, sex=None, birth_year=None):
+    """Create a new person with optional profile. Returns the new ID."""
     db = get_db()
     cursor = db.execute(
-        "INSERT OR IGNORE INTO people (name) VALUES (?)",
-        (name.strip(),),
+        "INSERT OR IGNORE INTO people (name, weight_kg, height_cm, sex, birth_year) VALUES (?, ?, ?, ?, ?)",
+        (name.strip(), weight_kg, height_cm, sex, birth_year),
     )
     db.commit()
     return cursor.lastrowid
+
+
+def update_person(person_id, name=None, weight_kg=None, height_cm=None, sex=None, birth_year=None):
+    """Update a person's profile."""
+    db = get_db()
+    fields = []
+    params = []
+    if name is not None:
+        fields.append("name = ?")
+        params.append(name.strip())
+    if weight_kg is not None:
+        fields.append("weight_kg = ?")
+        params.append(weight_kg)
+    if height_cm is not None:
+        fields.append("height_cm = ?")
+        params.append(height_cm)
+    if sex is not None:
+        fields.append("sex = ?")
+        params.append(sex)
+    if birth_year is not None:
+        fields.append("birth_year = ?")
+        params.append(birth_year)
+    if not fields:
+        return
+    params.append(person_id)
+    db.execute(f"UPDATE people SET {', '.join(fields)} WHERE id = ?", params)
+    db.commit()
 
 
 def delete_person(person_id):
@@ -211,3 +247,16 @@ def delete_person(person_id):
     cursor = db.execute("DELETE FROM people WHERE id = ?", (person_id,))
     db.commit()
     return cursor.rowcount > 0
+
+
+
+def update_activity_score(activity_id, score, weather_temp_c=None,
+                          weather_humidity=None, weather_multiplier=None):
+    """Update the score and weather data for an activity."""
+    db = get_db()
+    db.execute(
+        """UPDATE activities SET score = ?, weather_temp_c = ?,
+           weather_humidity = ?, weather_multiplier = ? WHERE id = ?""",
+        (score, weather_temp_c, weather_humidity, weather_multiplier, activity_id),
+    )
+    db.commit()

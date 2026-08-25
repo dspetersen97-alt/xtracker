@@ -75,6 +75,14 @@
             <span>&#128293; {{ activity.calories }} cal</span>
             {% endif %}
         </div>
+        {% if activity.score %}
+        <div style="margin-top: 0.5rem;">
+            <span style="font-weight: 600; color: var(--pico-primary);">&#9733; {{ activity.score }} pts</span>
+            {% if activity.weather_multiplier and activity.weather_multiplier > 1.0 %}
+            <small style="margin-left: 0.5rem; color: var(--pico-muted-color);">({{ activity.weather_multiplier }}x weather)</small>
+            {% endif %}
+        </div>
+        {% endif %}
         {% if activity.notes %}
         <p><small>{{ activity.notes | truncate(100) }}</small></p>
         {% endif %}

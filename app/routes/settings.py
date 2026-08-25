@@ -12,6 +12,7 @@ from ..models import (
     get_people,
     get_units,
     set_units,
+    update_person,
 )
 
 settings_bp = Blueprint("settings", __name__)
@@ -163,13 +164,46 @@ def import_csv():
 
 @settings_bp.route("/settings/people", methods=["POST"])
 def add_person():
-    """Add a new person."""
+    """Add a new person with profile."""
     name = request.form.get("name", "").strip()
     if not name:
         flash("Name is required.", "error")
-    else:
-        create_person(name)
-        flash(f"Person '{name}' added.", "success")
+        return redirect(url_for("settings.exercise_types"))
+
+    weight_kg = request.form.get("weight_kg", "").strip()
+    height_cm = request.form.get("height_cm", "").strip()
+    sex = request.form.get("sex", "").strip()
+    birth_year = request.form.get("birth_year", "").strip()
+
+    create_person(
+        name=name,
+        weight_kg=float(weight_kg) if weight_kg else None,
+        height_cm=float(height_cm) if height_cm else None,
+        sex=sex if sex in ("male", "female") else None,
+        birth_year=int(birth_year) if birth_year else None,
+    )
+    flash(f"Person '{name}' added.", "success")
+    return redirect(url_for("settings.exercise_types"))
+
+
+@settings_bp.route("/settings/people/<int:person_id>/edit", methods=["POST"])
+def edit_person(person_id):
+    """Update a person's profile."""
+    name = request.form.get("name", "").strip()
+    weight_kg = request.form.get("weight_kg", "").strip()
+    height_cm = request.form.get("height_cm", "").strip()
+    sex = request.form.get("sex", "").strip()
+    birth_year = request.form.get("birth_year", "").strip()
+
+    update_person(
+        person_id,
+        name=name if name else None,
+        weight_kg=float(weight_kg) if weight_kg else None,
+        height_cm=float(height_cm) if height_cm else None,
+        sex=sex if sex in ("male", "female") else None,
+        birth_year=int(birth_year) if birth_year else None,
+    )
+    flash("Profile updated.", "success")
     return redirect(url_for("settings.exercise_types"))
 
 
