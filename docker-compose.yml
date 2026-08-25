@@ -9,4 +9,5 @@ services:
     environment:
       - DATA_DIR=/data
       - PORT=5000
+      - SECRET_KEY=${SECRET_KEY:-xtracker-default-key-change-me}
     restart: unless-stopped
