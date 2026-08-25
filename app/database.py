@@ -26,11 +26,7 @@ def close_db(e=None):
 
 
 def _ensure_data_dir(db_path):
-    """Ensure the data directory exists and is writable.
-
-    Creates the directory with user-writable permissions if it doesn't exist.
-    Raises a clear error if the directory exists but isn't writable.
-    """
+    """Ensure the data directory exists and is writable."""
     data_dir = os.path.dirname(os.path.abspath(db_path))
 
     if not os.path.exists(data_dir):
@@ -64,6 +60,9 @@ def init_db(app):
     # Create tables
     db.executescript(SCHEMA_SQL)
 
+    # Run migrations for existing databases
+    _migrate(db)
+
     # Seed default exercise types if empty
     cursor = db.execute("SELECT COUNT(*) FROM exercise_types")
     if cursor.fetchone()[0] == 0:
@@ -74,7 +73,40 @@ def init_db(app):
             )
         db.commit()
 
+    # Seed default settings if empty
+    cursor = db.execute("SELECT COUNT(*) FROM settings")
+    if cursor.fetchone()[0] == 0:
+        db.execute("INSERT INTO settings (key, value) VALUES ('units', 'metric')")
+        db.commit()
+
     db.close()
+
+
+def _migrate(db):
+    """Add columns that may not exist in older databases."""
+    # Get existing columns for the activities table
+    cursor = db.execute("PRAGMA table_info(activities)")
+    existing_cols = {row[1] for row in cursor.fetchall()}
+
+    new_columns = [
+        ("title", "TEXT"),
+        ("avg_hr", "INTEGER"),
+        ("max_hr", "INTEGER"),
+        ("avg_pace_sec_per_km", "REAL"),
+        ("best_pace_sec_per_km", "REAL"),
+        ("total_ascent_m", "REAL"),
+        ("total_descent_m", "REAL"),
+        ("steps", "INTEGER"),
+        ("elapsed_time_minutes", "REAL"),
+        ("min_elevation_m", "REAL"),
+        ("max_elevation_m", "REAL"),
+    ]
+
+    for col_name, col_type in new_columns:
+        if col_name not in existing_cols:
+            db.execute(f"ALTER TABLE activities ADD COLUMN {col_name} {col_type}")
+
+    db.commit()
 
 
 SCHEMA_SQL = """
@@ -83,9 +115,20 @@ CREATE TABLE IF NOT EXISTS activities (
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     activity_date TEXT NOT NULL,
     activity_type TEXT NOT NULL,
+    title TEXT,
     duration_minutes INTEGER,
     distance_km REAL,
     calories INTEGER,
+    avg_hr INTEGER,
+    max_hr INTEGER,
+    avg_pace_sec_per_km REAL,
+    best_pace_sec_per_km REAL,
+    total_ascent_m REAL,
+    total_descent_m REAL,
+    steps INTEGER,
+    elapsed_time_minutes REAL,
+    min_elevation_m REAL,
+    max_elevation_m REAL,
     notes TEXT,
     details TEXT DEFAULT '{}'
 );
@@ -99,6 +142,11 @@ CREATE TABLE IF NOT EXISTS exercise_types (
     category TEXT NOT NULL,
     fields TEXT NOT NULL DEFAULT '[]',
     is_default INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
 );
 """
 

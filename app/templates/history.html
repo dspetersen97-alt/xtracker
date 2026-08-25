@@ -45,17 +45,17 @@
                     <span class="badge badge-{{ 'outdoor' if activity.activity_type in ('hike', 'walk', 'run') else ('strength' if activity.activity_type == 'strength' else 'cardio') }}">
                         {{ activity.activity_type | capitalize }}
                     </span>
-                    <strong style="margin-left: 0.5rem;">{{ activity.activity_date }}</strong>
+                    <strong style="margin-left: 0.5rem;">{% if activity.title %}{{ activity.title }}{% else %}{{ activity.activity_date }}{% endif %}</strong>
                 </div>
                 <a href="{{ url_for('activities.activity_detail', activity_id=activity.id) }}">View</a>
             </div>
         </header>
         <div style="display: flex; gap: 1.5rem; flex-wrap: wrap;">
-            {% if activity.duration_minutes %}
-            <span>&#9201; {{ activity.duration_minutes }} min</span>
+            {% if activity.duration_display and activity.duration_display != '--' %}
+            <span>&#9201; {{ activity.duration_display }}</span>
             {% endif %}
-            {% if activity.distance_km %}
-            <span>&#128099; {{ "%.1f" | format(activity.distance_km) }} km</span>
+            {% if activity.distance_display %}
+            <span>&#128099; {{ activity.distance_display }} {{ activity.distance_unit }}</span>
             {% endif %}
             {% if activity.calories %}
             <span>&#128293; {{ activity.calories }} cal</span>

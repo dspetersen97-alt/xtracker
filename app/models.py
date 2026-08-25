@@ -8,16 +8,26 @@ from .database import get_db
 
 
 def create_activity(activity_date, activity_type, duration_minutes=None,
-                    distance_km=None, calories=None, notes=None, details=None):
+                    distance_km=None, calories=None, notes=None, details=None,
+                    title=None, avg_hr=None, max_hr=None,
+                    avg_pace_sec_per_km=None, best_pace_sec_per_km=None,
+                    total_ascent_m=None, total_descent_m=None, steps=None,
+                    elapsed_time_minutes=None, min_elevation_m=None,
+                    max_elevation_m=None):
     """Create a new activity record. Returns the new activity's ID."""
     db = get_db()
     details_json = json.dumps(details) if details else "{}"
     cursor = db.execute(
-        """INSERT INTO activities (activity_date, activity_type, duration_minutes,
-           distance_km, calories, notes, details)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        (activity_date, activity_type, duration_minutes, distance_km,
-         calories, notes, details_json),
+        """INSERT INTO activities (activity_date, activity_type, title,
+           duration_minutes, distance_km, calories, avg_hr, max_hr,
+           avg_pace_sec_per_km, best_pace_sec_per_km, total_ascent_m,
+           total_descent_m, steps, elapsed_time_minutes, min_elevation_m,
+           max_elevation_m, notes, details)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (activity_date, activity_type, title, duration_minutes, distance_km,
+         calories, avg_hr, max_hr, avg_pace_sec_per_km, best_pace_sec_per_km,
+         total_ascent_m, total_descent_m, steps, elapsed_time_minutes,
+         min_elevation_m, max_elevation_m, notes, details_json),
     )
     db.commit()
     return cursor.lastrowid
@@ -76,7 +86,6 @@ def get_activity_by_id(activity_id):
     if row is None:
         return None
     activity = dict(row)
-    # Parse the JSON details for convenience
     activity["details_parsed"] = json.loads(activity.get("details") or "{}")
     return activity
 
@@ -134,3 +143,37 @@ def delete_exercise_type(type_id):
     )
     db.commit()
     return cursor.rowcount > 0
+
+
+# --- Settings ---
+
+
+def get_setting(key, default=None):
+    """Get a setting value by key."""
+    db = get_db()
+    row = db.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+    if row is None:
+        return default
+    return row["value"]
+
+
+def set_setting(key, value):
+    """Set a setting value (upsert)."""
+    db = get_db()
+    db.execute(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+        (key, value),
+    )
+    db.commit()
+
+
+def get_units():
+    """Get the current unit preference ('metric' or 'imperial')."""
+    return get_setting("units", "metric")
+
+
+def set_units(units):
+    """Set the unit preference."""
+    if units not in ("metric", "imperial"):
+        raise ValueError("Units must be 'metric' or 'imperial'")
+    set_setting("units", units)

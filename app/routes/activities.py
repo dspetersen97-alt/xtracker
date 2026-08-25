@@ -10,7 +10,9 @@ from ..models import (
     get_activities,
     get_activity_by_id,
     get_exercise_types,
+    get_units,
 )
+from ..units import convert_activity_for_display
 
 activities_bp = Blueprint("activities", __name__)
 
@@ -29,7 +31,6 @@ def log_workout_submit():
     exercise_types = get_exercise_types()
     today = date.today().isoformat()
 
-    # Extract common fields
     activity_type = request.form.get("activity_type", "").strip()
     activity_date = request.form.get("activity_date", "").strip()
     duration_minutes = request.form.get("duration_minutes", "").strip()
@@ -37,14 +38,12 @@ def log_workout_submit():
     calories = request.form.get("calories", "").strip()
     notes = request.form.get("notes", "").strip()
 
-    # Validation
     errors = []
     if not activity_type:
         errors.append("Activity type is required.")
     if not activity_date:
         errors.append("Date is required.")
 
-    # Parse numeric fields
     duration_val = None
     if duration_minutes:
         try:
@@ -72,10 +71,8 @@ def log_workout_submit():
         except ValueError:
             errors.append("Calories must be a whole number.")
 
-    # Build details JSON based on activity type
     details = {}
 
-    # Type-specific fields
     if activity_type in ("hike", "walk", "run"):
         elevation_gain = request.form.get("elevation_gain", "").strip()
         if elevation_gain:
@@ -96,7 +93,6 @@ def log_workout_submit():
                 errors.append("Heart rate must be a whole number.")
 
     elif activity_type == "strength":
-        # Parse exercise rows
         exercises = []
         exercise_names = request.form.getlist("exercise_name[]")
         exercise_sets = request.form.getlist("exercise_sets[]")
@@ -124,7 +120,6 @@ def log_workout_submit():
         details["exercises"] = exercises
 
     else:
-        # Custom type — store any extra fields generically
         elevation_gain = request.form.get("elevation_gain", "").strip()
         machine = request.form.get("machine", "").strip()
         heart_rate = request.form.get("heart_rate", "").strip()
@@ -151,7 +146,6 @@ def log_workout_submit():
             form=request.form,
         ), 422
 
-    # Create the activity
     activity_id = create_activity(
         activity_date=activity_date,
         activity_type=activity_type,
@@ -162,21 +156,19 @@ def log_workout_submit():
         details=details if details else None,
     )
 
-    flash(f"Workout logged successfully!", "success")
+    flash("Workout logged successfully!", "success")
     return redirect(url_for("activities.history"))
 
 
 @activities_bp.route("/history")
 def history():
     """Show workout history with filtering."""
-    # Get filter params
     activity_type = request.args.get("type", "").strip()
     date_from = request.args.get("from", "").strip()
     date_to = request.args.get("to", "").strip()
     page = request.args.get("page", 1, type=int)
     per_page = 20
 
-    # Get filtered activities
     offset = (page - 1) * per_page
     activities = get_activities(
         activity_type=activity_type or None,
@@ -194,10 +186,14 @@ def history():
 
     total_pages = (total + per_page - 1) // per_page if total > 0 else 1
     exercise_types = get_exercise_types()
+    units = get_units()
+
+    # Convert activities for display
+    display_activities = [convert_activity_for_display(a, units) for a in activities]
 
     return render_template(
         "history.html",
-        activities=activities,
+        activities=display_activities,
         exercise_types=exercise_types,
         current_type=activity_type,
         date_from=date_from,
@@ -205,6 +201,7 @@ def history():
         page=page,
         total_pages=total_pages,
         total=total,
+        units=units,
     )
 
 
@@ -215,7 +212,10 @@ def activity_detail(activity_id):
     if activity is None:
         flash("Activity not found.", "error")
         return redirect(url_for("activities.history"))
-    return render_template("activity_detail.html", activity=activity)
+
+    units = get_units()
+    display = convert_activity_for_display(activity, units)
+    return render_template("activity_detail.html", activity=display, units=units)
 
 
 @activities_bp.route("/history/<int:activity_id>/delete", methods=["POST"])

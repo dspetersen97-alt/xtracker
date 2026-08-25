@@ -1,9 +1,31 @@
 {% extends "base.html" %}
-{% block title %}Settings — xtracker{% endblock %}
+{% block title %}Settings - xtracker{% endblock %}
 
 {% block content %}
 <h1>Settings</h1>
 
+<!-- Unit Toggle -->
+<article>
+    <header><h2>Units</h2></header>
+    <form method="POST" action="{{ url_for('settings.toggle_units') }}">
+        <fieldset role="group">
+            <select name="units" aria-label="Select unit system">
+                <option value="metric" {% if units == 'metric' %}selected{% endif %}>Metric (km, meters)</option>
+                <option value="imperial" {% if units == 'imperial' %}selected{% endif %}>Imperial (miles, feet)</option>
+            </select>
+            <button type="submit">Save</button>
+        </fieldset>
+    </form>
+</article>
+
+<!-- Data Import -->
+<article>
+    <header><h2>Import Data</h2></header>
+    <p>Import activities from a Garmin Connect CSV export.</p>
+    <a href="{{ url_for('settings.import_page') }}" role="button" class="outline">Import CSV</a>
+</article>
+
+<!-- Exercise Types -->
 <h2>Exercise Types</h2>
 
 <a href="{{ url_for('settings.new_exercise_type') }}" role="button" class="outline" style="margin-bottom: 1rem; display: inline-block;">
@@ -38,14 +60,14 @@
                 <td>
                     {% if not et.is_default %}
                     <form method="POST" action="{{ url_for('settings.delete_type', type_id=et.id) }}"
-                          onsubmit="return confirm('Delete this exercise type? This cannot be undone.');"
+                          onsubmit="return confirm('Delete this exercise type?');"
                           style="display: inline;">
                         <button type="submit" class="secondary outline" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">
                             Delete
                         </button>
                     </form>
                     {% else %}
-                    <small>—</small>
+                    <small>-</small>
                     {% endif %}
                 </td>
             </tr>

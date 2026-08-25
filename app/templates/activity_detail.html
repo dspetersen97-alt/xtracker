@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}{{ activity.activity_type | capitalize }} — {{ activity.activity_date }} — xtracker{% endblock %}
+{% block title %}{{ activity.activity_type | capitalize }} - {{ activity.activity_date }} - xtracker{% endblock %}
 
 {% block content %}
 <nav aria-label="Breadcrumb">
     <ul>
         <li><a href="{{ url_for('activities.history') }}">History</a></li>
-        <li>{{ activity.activity_type | capitalize }} — {{ activity.activity_date }}</li>
+        <li>{{ activity.activity_type | capitalize }} - {{ activity.activity_date }}</li>
     </ul>
 </nav>
 
@@ -15,7 +15,7 @@
             <span class="badge badge-{{ 'outdoor' if activity.activity_type in ('hike', 'walk', 'run') else ('strength' if activity.activity_type == 'strength' else 'cardio') }}">
                 {{ activity.activity_type | capitalize }}
             </span>
-            {{ activity.activity_date }}
+            {% if activity.title %}{{ activity.title }}{% else %}{{ activity.activity_date }}{% endif %}
         </h2>
     </header>
 
@@ -23,19 +23,74 @@
         <dt>Date</dt>
         <dd>{{ activity.activity_date }}</dd>
 
-        {% if activity.duration_minutes %}
-        <dt>Duration</dt>
-        <dd>{{ activity.duration_minutes }} minutes</dd>
+        {% if activity.title %}
+        <dt>Title</dt>
+        <dd>{{ activity.title }}</dd>
         {% endif %}
 
-        {% if activity.distance_km %}
+        {% if activity.duration_display != '--' %}
+        <dt>Duration</dt>
+        <dd>{{ activity.duration_display }}</dd>
+        {% endif %}
+
+        {% if activity.elapsed_time_display != '--' %}
+        <dt>Elapsed Time</dt>
+        <dd>{{ activity.elapsed_time_display }}</dd>
+        {% endif %}
+
+        {% if activity.distance_display %}
         <dt>Distance</dt>
-        <dd>{{ "%.2f" | format(activity.distance_km) }} km</dd>
+        <dd>{{ activity.distance_display }} {{ activity.distance_unit }}</dd>
         {% endif %}
 
         {% if activity.calories %}
         <dt>Calories</dt>
         <dd>{{ activity.calories }}</dd>
+        {% endif %}
+
+        {% if activity.avg_hr %}
+        <dt>Avg Heart Rate</dt>
+        <dd>{{ activity.avg_hr }} bpm</dd>
+        {% endif %}
+
+        {% if activity.max_hr %}
+        <dt>Max Heart Rate</dt>
+        <dd>{{ activity.max_hr }} bpm</dd>
+        {% endif %}
+
+        {% if activity.avg_pace_display != '--' %}
+        <dt>Avg Pace</dt>
+        <dd>{{ activity.avg_pace_display }} {{ activity.pace_unit }}</dd>
+        {% endif %}
+
+        {% if activity.best_pace_display != '--' %}
+        <dt>Best Pace</dt>
+        <dd>{{ activity.best_pace_display }} {{ activity.pace_unit }}</dd>
+        {% endif %}
+
+        {% if activity.total_ascent_display %}
+        <dt>Total Ascent</dt>
+        <dd>{{ activity.total_ascent_display }} {{ activity.elevation_unit }}</dd>
+        {% endif %}
+
+        {% if activity.total_descent_display %}
+        <dt>Total Descent</dt>
+        <dd>{{ activity.total_descent_display }} {{ activity.elevation_unit }}</dd>
+        {% endif %}
+
+        {% if activity.min_elevation_display %}
+        <dt>Min Elevation</dt>
+        <dd>{{ activity.min_elevation_display }} {{ activity.elevation_unit }}</dd>
+        {% endif %}
+
+        {% if activity.max_elevation_display %}
+        <dt>Max Elevation</dt>
+        <dd>{{ activity.max_elevation_display }} {{ activity.elevation_unit }}</dd>
+        {% endif %}
+
+        {% if activity.steps %}
+        <dt>Steps</dt>
+        <dd>{{ activity.steps }}</dd>
         {% endif %}
 
         {% if activity.details_parsed.get('elevation_gain_m') %}

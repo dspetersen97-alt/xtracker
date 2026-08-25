@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Import Data - xtracker{% endblock %}
+
+{% block content %}
+<nav aria-label="Breadcrumb">
+    <ul>
+        <li><a href="{{ url_for('settings.exercise_types') }}">Settings</a></li>
+        <li>Import Data</li>
+    </ul>
+</nav>
+
+<h1>Import CSV Data</h1>
+
+<article>
+    <p>Upload a CSV export from Garmin Connect. The following columns will be imported:</p>
+    <ul>
+        <li>Activity Type, Date, Title</li>
+        <li>Distance, Calories, Time, Elapsed Time</li>
+        <li>Avg HR, Max HR</li>
+        <li>Avg Pace, Best Pace</li>
+        <li>Total Ascent, Total Descent</li>
+        <li>Steps, Min Elevation, Max Elevation</li>
+    </ul>
+</article>
+
+<form method="POST" action="{{ url_for('settings.import_csv') }}" enctype="multipart/form-data">
+    <label for="csv_file">CSV File</label>
+    <input type="file" id="csv_file" name="csv_file" accept=".csv" required>
+
+    <label for="source_units">Source Data Units</label>
+    <select id="source_units" name="source_units" aria-label="Unit system of the source data">
+        <option value="imperial" selected>Imperial (miles, feet) - Garmin default</option>
+        <option value="metric">Metric (km, meters)</option>
+    </select>
+    <small>Garmin Connect exports in imperial (miles/feet) by default. Select metric only if you changed your Garmin settings.</small>
+
+    <div class="grid" style="margin-top: 1rem;">
+        <button type="submit">Import</button>
+        <a href="{{ url_for('settings.exercise_types') }}" role="button" class="secondary outline">Cancel</a>
+    </div>
+</form>
+{% endblock %}
