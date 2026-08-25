@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}xtracker — Home{% endblock %}
+
+{% block content %}
+<hgroup>
+    <h1>xtracker</h1>
+    <p>Your personal exercise tracker</p>
+</hgroup>
+
+<!-- Quick Stats -->
+<div class="grid">
+    <article>
+        <header><strong>This Week</strong></header>
+        <p style="font-size: 2rem; margin: 0;">{{ stats.workouts_this_week }}</p>
+        <small>workout{{ 's' if stats.workouts_this_week != 1 else '' }}</small>
+    </article>
+    <article>
+        <header><strong>Distance</strong></header>
+        <p style="font-size: 2rem; margin: 0;">{{ stats.distance_this_week }}</p>
+        <small>km this week</small>
+    </article>
+    <article>
+        <header><strong>Total</strong></header>
+        <p style="font-size: 2rem; margin: 0;">{{ stats.total_workouts }}</p>
+        <small>workouts logged</small>
+    </article>
+</div>
+
+{% if stats.last_workout %}
+<p><small>Last workout: <strong>{{ stats.last_workout.type | capitalize }}</strong> on {{ stats.last_workout.date }}</small></p>
+{% endif %}
+
+<!-- Quick Actions -->
+<div class="grid">
+    <a href="{{ url_for('activities.log_workout') }}" role="button">Log Workout</a>
+    <a href="{{ url_for('activities.history') }}" role="button" class="secondary">View History</a>
+    <a href="{{ url_for('progress.dashboard') }}" role="button" class="contrast">Progress</a>
+</div>
+
+<!-- Network Access -->
+<article>
+    <header><strong>Access from other devices</strong></header>
+    <p>Open this URL on any device on your network:</p>
+    <code>http://{{ lan_ip }}:{{ port }}</code>
+</article>
+{% endblock %}

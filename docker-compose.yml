@@ -1,0 +1,12 @@
+services:
+  xtracker:
+    build: .
+    container_name: xtracker
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data:/data
+    environment:
+      - DATA_DIR=/data
+      - PORT=5000
+    restart: unless-stopped

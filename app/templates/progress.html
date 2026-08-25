@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block title %}Progress — xtracker{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block content %}
+<h1>Progress</h1>
+
+<!-- Time range toggle -->
+<nav>
+    <ul>
+        <li><a href="{{ url_for('progress.dashboard', weeks='4') }}"
+               {% if current_weeks == '4' %}aria-current="page"{% endif %}>4 Weeks</a></li>
+        <li><a href="{{ url_for('progress.dashboard', weeks='12') }}"
+               {% if current_weeks == '12' %}aria-current="page"{% endif %}>12 Weeks</a></li>
+        <li><a href="{{ url_for('progress.dashboard', weeks='26') }}"
+               {% if current_weeks == '26' %}aria-current="page"{% endif %}>6 Months</a></li>
+    </ul>
+</nav>
+
+<!-- Workouts per Week -->
+<article>
+    <header><h3>Workouts per Week</h3></header>
+    <div class="chart-container">
+        <canvas id="workoutsChart" aria-label="Bar chart showing workouts per week"></canvas>
+    </div>
+</article>
+
+<!-- Distance per Week -->
+<article>
+    <header><h3>Distance per Week (km)</h3></header>
+    <div class="chart-container">
+        <canvas id="distanceChart" aria-label="Line chart showing distance per week"></canvas>
+    </div>
+</article>
+
+<!-- Duration per Week -->
+<article>
+    <header><h3>Duration per Week (minutes)</h3></header>
+    <div class="chart-container">
+        <canvas id="durationChart" aria-label="Line chart showing duration per week"></canvas>
+    </div>
+</article>
+
+<!-- Activity Type Breakdown -->
+<article>
+    <header><h3>Activity Type Breakdown</h3></header>
+    <div class="chart-container" style="max-width: 400px; margin: 0 auto;">
+        <canvas id="typeChart" aria-label="Doughnut chart showing activity type distribution"></canvas>
+    </div>
+</article>
+
+<!-- Drill-down links -->
+<article>
+    <header><h3>Drill Down by Type</h3></header>
+    <div class="grid">
+        <a href="{{ url_for('progress.type_detail', activity_type='hike') }}" role="button" class="outline">Hike</a>
+        <a href="{{ url_for('progress.type_detail', activity_type='walk') }}" role="button" class="outline">Walk</a>
+        <a href="{{ url_for('progress.type_detail', activity_type='run') }}" role="button" class="outline">Run</a>
+        <a href="{{ url_for('progress.type_detail', activity_type='cardio') }}" role="button" class="outline">Cardio</a>
+        <a href="{{ url_for('progress.type_detail', activity_type='strength') }}" role="button" class="outline">Strength</a>
+    </div>
+</article>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const chartColors = {
+        primary: 'rgba(54, 162, 235, 0.8)',
+        primaryBorder: 'rgba(54, 162, 235, 1)',
+        success: 'rgba(75, 192, 192, 0.8)',
+        successBorder: 'rgba(75, 192, 192, 1)',
+        warning: 'rgba(255, 206, 86, 0.8)',
+        warningBorder: 'rgba(255, 206, 86, 1)',
+        doughnut: [
+            'rgba(46, 125, 50, 0.8)',   // outdoor - green
+            'rgba(230, 81, 0, 0.8)',    // cardio - orange
+            'rgba(21, 101, 192, 0.8)',  // strength - blue
+            'rgba(156, 39, 176, 0.8)',  // purple
+            'rgba(255, 152, 0, 0.8)',   // amber
+            'rgba(0, 150, 136, 0.8)',   // teal
+        ]
+    };
+
+    // Workouts per Week (Bar)
+    new Chart(document.getElementById('workoutsChart'), {
+        type: 'bar',
+        data: {
+            labels: {{ stats.workouts_per_week.labels | tojson }},
+            datasets: [{
+                label: 'Workouts',
+                data: {{ stats.workouts_per_week.data | tojson }},
+                backgroundColor: chartColors.primary,
+                borderColor: chartColors.primaryBorder,
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: { beginAtZero: true, ticks: { stepSize: 1 } }
+            }
+        }
+    });
+
+    // Distance per Week (Line)
+    new Chart(document.getElementById('distanceChart'), {
+        type: 'line',
+        data: {
+            labels: {{ stats.distance_per_week.labels | tojson }},
+            datasets: [{
+                label: 'Distance (km)',
+                data: {{ stats.distance_per_week.data | tojson }},
+                borderColor: chartColors.successBorder,
+                backgroundColor: chartColors.success,
+                fill: true,
+                tension: 0.3
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+
+    // Duration per Week (Line)
+    new Chart(document.getElementById('durationChart'), {
+        type: 'line',
+        data: {
+            labels: {{ stats.duration_per_week.labels | tojson }},
+            datasets: [{
+                label: 'Duration (min)',
+                data: {{ stats.duration_per_week.data | tojson }},
+                borderColor: chartColors.warningBorder,
+                backgroundColor: chartColors.warning,
+                fill: true,
+                tension: 0.3
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+
+    // Activity Type Breakdown (Doughnut)
+    new Chart(document.getElementById('typeChart'), {
+        type: 'doughnut',
+        data: {
+            labels: {{ stats.type_breakdown.labels | tojson }},
+            datasets: [{
+                data: {{ stats.type_breakdown.data | tojson }},
+                backgroundColor: chartColors.doughnut.slice(0, {{ stats.type_breakdown.labels | length }})
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { position: 'bottom' }
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

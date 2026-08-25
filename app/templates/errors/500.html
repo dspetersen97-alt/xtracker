@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Server Error — xtracker{% endblock %}
+
+{% block content %}
+<article>
+    <header><h1>500 — Something Went Wrong</h1></header>
+    <p>An unexpected error occurred. Please try again.</p>
+    <footer>
+        <a href="{{ url_for('main.index') }}" role="button">Go Home</a>
+    </footer>
+</article>
+{% endblock %}

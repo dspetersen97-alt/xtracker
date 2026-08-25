@@ -1,0 +1,110 @@
+/* xtracker custom styles */
+
+/* Ensure the grid buttons look good on mobile */
+.grid a[role="button"] {
+    text-align: center;
+    display: block;
+}
+
+/* Activity type badges */
+.badge {
+    display: inline-block;
+    padding: 0.2em 0.6em;
+    border-radius: 4px;
+    font-size: 0.8em;
+    font-weight: 600;
+    text-transform: capitalize;
+}
+
+.badge-outdoor {
+    background-color: #2e7d32;
+    color: white;
+}
+
+.badge-cardio {
+    background-color: #e65100;
+    color: white;
+}
+
+.badge-strength {
+    background-color: #1565c0;
+    color: white;
+}
+
+/* Flash messages */
+article[role="alert"] {
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+}
+
+/* Exercise rows in strength form */
+.exercise-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr auto;
+    gap: 0.5rem;
+    align-items: end;
+    margin-bottom: 0.5rem;
+}
+
+.exercise-row input {
+    margin-bottom: 0;
+}
+
+/* Chart containers */
+.chart-container {
+    position: relative;
+    width: 100%;
+    max-width: 100%;
+    margin-bottom: 2rem;
+}
+
+/* Filter form inline */
+.filter-form {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: end;
+    margin-bottom: 1.5rem;
+}
+
+.filter-form label {
+    margin-bottom: 0;
+}
+
+.filter-form select,
+.filter-form input {
+    margin-bottom: 0;
+}
+
+/* Pagination */
+.pagination {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 1.5rem;
+}
+
+/* Detail view key-value */
+.detail-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.5rem 1rem;
+}
+
+.detail-grid dt {
+    font-weight: 600;
+}
+
+/* Responsive tweaks */
+@media (max-width: 768px) {
+    .exercise-row {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .filter-form {
+        flex-direction: column;
+    }
+
+    .grid a[role="button"] {
+        margin-bottom: 0.5rem;
+    }
+}

@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}History — xtracker{% endblock %}
+
+{% block content %}
+<h1>Workout History</h1>
+
+<!-- Filters -->
+<form method="GET" action="{{ url_for('activities.history') }}" class="filter-form">
+    <div>
+        <label for="filter-type">Type</label>
+        <select id="filter-type" name="type" aria-label="Filter by activity type">
+            <option value="">All types</option>
+            {% for et in exercise_types %}
+            <option value="{{ et.name }}" {% if current_type == et.name %}selected{% endif %}>
+                {{ et.name | capitalize }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label for="filter-from">From</label>
+        <input type="date" id="filter-from" name="from" value="{{ date_from }}">
+    </div>
+    <div>
+        <label for="filter-to">To</label>
+        <input type="date" id="filter-to" name="to" value="{{ date_to }}">
+    </div>
+    <div>
+        <button type="submit" class="outline">Filter</button>
+        {% if current_type or date_from or date_to %}
+        <a href="{{ url_for('activities.history') }}" role="button" class="secondary outline">Clear</a>
+        {% endif %}
+    </div>
+</form>
+
+<p><small>{{ total }} workout{{ 's' if total != 1 else '' }} found</small></p>
+
+{% if activities %}
+<div class="overflow-auto">
+    {% for activity in activities %}
+    <article>
+        <header>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <span class="badge badge-{{ 'outdoor' if activity.activity_type in ('hike', 'walk', 'run') else ('strength' if activity.activity_type == 'strength' else 'cardio') }}">
+                        {{ activity.activity_type | capitalize }}
+                    </span>
+                    <strong style="margin-left: 0.5rem;">{{ activity.activity_date }}</strong>
+                </div>
+                <a href="{{ url_for('activities.activity_detail', activity_id=activity.id) }}">View</a>
+            </div>
+        </header>
+        <div style="display: flex; gap: 1.5rem; flex-wrap: wrap;">
+            {% if activity.duration_minutes %}
+            <span>&#9201; {{ activity.duration_minutes }} min</span>
+            {% endif %}
+            {% if activity.distance_km %}
+            <span>&#128099; {{ "%.1f" | format(activity.distance_km) }} km</span>
+            {% endif %}
+            {% if activity.calories %}
+            <span>&#128293; {{ activity.calories }} cal</span>
+            {% endif %}
+        </div>
+        {% if activity.notes %}
+        <p><small>{{ activity.notes | truncate(100) }}</small></p>
+        {% endif %}
+    </article>
+    {% endfor %}
+</div>
+
+<!-- Pagination -->
+{% if total_pages > 1 %}
+<nav class="pagination" aria-label="Page navigation">
+    {% if page > 1 %}
+    <a href="{{ url_for('activities.history', type=current_type, to=date_to, page=page-1) }}{{ '&from=' + date_from if date_from else '' }}" role="button" class="outline">
+        &larr; Newer
+    </a>
+    {% else %}
+    <span></span>
+    {% endif %}
+
+    <span>Page {{ page }} of {{ total_pages }}</span>
+
+    {% if page < total_pages %}
+    <a href="{{ url_for('activities.history', type=current_type, to=date_to, page=page+1) }}{{ '&from=' + date_from if date_from else '' }}" role="button" class="outline">
+        Older &rarr;
+    </a>
+    {% else %}
+    <span></span>
+    {% endif %}
+</nav>
+{% endif %}
+
+{% else %}
+<article>
+    <p>No workouts found. <a href="{{ url_for('activities.log_workout') }}">Log your first workout!</a></p>
+</article>
+{% endif %}
+{% endblock %}
