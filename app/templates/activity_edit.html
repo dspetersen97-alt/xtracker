@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}Edit Workout - xtracker{% endblock %}
+
+{% block content %}
+<nav aria-label="Breadcrumb">
+    <ul>
+        <li><a href="{{ url_for('activities.history') }}">History</a></li>
+        <li><a href="{{ url_for('activities.activity_detail', activity_id=activity.id) }}">Detail</a></li>
+        <li>Edit</li>
+    </ul>
+</nav>
+
+<h1>Edit Workout</h1>
+
+<form method="POST" action="{{ url_for('activities.activity_edit_submit', activity_id=activity.id) }}">
+    <div class="grid">
+        <div>
+            <label for="activity_type">Activity Type</label>
+            <select id="activity_type" name="activity_type" required>
+                {% for et in exercise_types %}
+                <option value="{{ et.name }}" {% if activity.activity_type == et.name %}selected{% endif %}>
+                    {{ et.name | capitalize }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="activity_date">Date</label>
+            <input type="text" id="activity_date" name="activity_date"
+                   value="{{ activity.activity_date }}" required>
+        </div>
+    </div>
+
+    <div class="grid">
+        <div>
+            <label for="title">Title</label>
+            <input type="text" id="title" name="title" value="{{ activity.title or '' }}">
+        </div>
+        <div>
+            <label for="person">Person</label>
+            <select id="person" name="person">
+                <option value="">-- No person --</option>
+                {% for p in people %}
+                <option value="{{ p.name }}" {% if activity.person == p.name %}selected{% endif %}>
+                    {{ p.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
+    <div class="grid">
+        <div>
+            <label for="duration_minutes">Duration (minutes)</label>
+            <input type="number" id="duration_minutes" name="duration_minutes"
+                   step="0.01" min="0" value="{{ activity.duration_minutes or '' }}">
+        </div>
+        <div>
+            <label for="distance_km">Distance (km)</label>
+            <input type="number" id="distance_km" name="distance_km"
+                   step="0.01" min="0" value="{{ activity.distance_km or '' }}">
+        </div>
+        <div>
+            <label for="calories">Calories</label>
+            <input type="number" id="calories" name="calories"
+                   min="0" value="{{ activity.calories or '' }}">
+        </div>
+    </div>
+
+    <div class="grid">
+        <div>
+            <label for="avg_hr">Avg Heart Rate</label>
+            <input type="number" id="avg_hr" name="avg_hr"
+                   min="0" value="{{ activity.avg_hr or '' }}">
+        </div>
+        <div>
+            <label for="max_hr">Max Heart Rate</label>
+            <input type="number" id="max_hr" name="max_hr"
+                   min="0" value="{{ activity.max_hr or '' }}">
+        </div>
+        <div>
+            <label for="steps">Steps</label>
+            <input type="number" id="steps" name="steps"
+                   min="0" value="{{ activity.steps or '' }}">
+        </div>
+    </div>
+
+    <div class="grid">
+        <div>
+            <label for="total_ascent_m">Total Ascent (m)</label>
+            <input type="number" id="total_ascent_m" name="total_ascent_m"
+                   step="0.1" min="0" value="{{ activity.total_ascent_m or '' }}">
+        </div>
+        <div>
+            <label for="total_descent_m">Total Descent (m)</label>
+            <input type="number" id="total_descent_m" name="total_descent_m"
+                   step="0.1" min="0" value="{{ activity.total_descent_m or '' }}">
+        </div>
+    </div>
+
+    <div class="grid">
+        <div>
+            <label for="min_elevation_m">Min Elevation (m)</label>
+            <input type="number" id="min_elevation_m" name="min_elevation_m"
+                   step="0.1" value="{{ activity.min_elevation_m or '' }}">
+        </div>
+        <div>
+            <label for="max_elevation_m">Max Elevation (m)</label>
+            <input type="number" id="max_elevation_m" name="max_elevation_m"
+                   step="0.1" value="{{ activity.max_elevation_m or '' }}">
+        </div>
+    </div>
+
+    <!-- Weather -->
+    <details {% if activity.weather_temp_c is not none or activity.weather_humidity is not none %}open{% endif %}>
+        <summary>Weather Conditions</summary>
+        <div class="grid">
+            <div>
+                <label for="weather_temp">Temperature (&deg;{{ units_label }})</label>
+                <input type="number" id="weather_temp" name="weather_temp" step="0.1"
+                       value="{% if activity.weather_temp_c is not none %}{% if units == 'imperial' %}{{ (activity.weather_temp_c * 9/5 + 32) | round(1) }}{% else %}{{ activity.weather_temp_c | round(1) }}{% endif %}{% endif %}">
+            </div>
+            <div>
+                <label for="weather_humidity">Humidity (%)</label>
+                <input type="number" id="weather_humidity" name="weather_humidity"
+                       min="0" max="100" step="1"
+                       value="{{ activity.weather_humidity | round(0) | int if activity.weather_humidity is not none else '' }}">
+            </div>
+        </div>
+    </details>
+
+    <!-- Strength Exercises -->
+    {% if activity.activity_type == 'strength' and activity.details_parsed.get('exercises') %}
+    <h3>Exercises</h3>
+    <div id="exercise-list">
+        {% for ex in activity.details_parsed.exercises %}
+        <div class="exercise-row">
+            <input type="text" name="exercise_name[]" value="{{ ex.name }}" placeholder="Exercise name">
+            <input type="number" name="exercise_sets[]" value="{{ ex.get('sets', '') }}" placeholder="Sets" min="0">
+            <input type="number" name="exercise_reps[]" value="{{ ex.get('reps', '') }}" placeholder="Reps" min="0">
+            <input type="number" name="exercise_weight[]" value="{{ ex.get('weight_kg', '') }}" placeholder="Weight (kg)" min="0" step="0.5">
+            <button type="button" class="remove-exercise" aria-label="Remove">&times;</button>
+        </div>
+        {% endfor %}
+    </div>
+    <button type="button" id="add-exercise" class="secondary outline">+ Add Exercise</button>
+    {% endif %}
+
+    <!-- Notes -->
+    <label for="notes">Notes</label>
+    <textarea id="notes" name="notes" rows="3">{{ activity.notes or '' }}</textarea>
+
+    <!-- Submit -->
+    <div class="grid">
+        <button type="submit">Save Changes</button>
+        <a href="{{ url_for('activities.activity_detail', activity_id=activity.id) }}" role="button" class="secondary outline">Cancel</a>
+    </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const exerciseList = document.getElementById('exercise-list');
+    const addBtn = document.getElementById('add-exercise');
+
+    if (addBtn) {
+        addBtn.addEventListener('click', function() {
+            const row = document.createElement('div');
+            row.className = 'exercise-row';
+            row.innerHTML = `
+                <input type="text" name="exercise_name[]" placeholder="Exercise name">
+                <input type="number" name="exercise_sets[]" placeholder="Sets" min="0">
+                <input type="number" name="exercise_reps[]" placeholder="Reps" min="0">
+                <input type="number" name="exercise_weight[]" placeholder="Weight (kg)" min="0" step="0.5">
+                <button type="button" class="remove-exercise" aria-label="Remove">&times;</button>
+            `;
+            exerciseList.appendChild(row);
+        });
+    }
+
+    if (exerciseList) {
+        exerciseList.addEventListener('click', function(e) {
+            if (e.target.classList.contains('remove-exercise')) {
+                const rows = exerciseList.querySelectorAll('.exercise-row');
+                if (rows.length > 1) {
+                    e.target.closest('.exercise-row').remove();
+                }
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

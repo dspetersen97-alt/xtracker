@@ -110,13 +110,20 @@ def _migrate(db):
     # Create indexes for new columns (safe to run after columns exist)
     db.execute("CREATE INDEX IF NOT EXISTS idx_activities_person ON activities(person)")
 
-    # Migrate activities table: add score and weather columns
-    if "score" not in existing_cols:
-        db.execute("ALTER TABLE activities ADD COLUMN score REAL")
+    # Migrate activities table: add weather and person snapshot columns
     if "weather_temp_c" not in existing_cols:
         db.execute("ALTER TABLE activities ADD COLUMN weather_temp_c REAL")
     if "weather_humidity" not in existing_cols:
         db.execute("ALTER TABLE activities ADD COLUMN weather_humidity REAL")
+    if "person_weight_kg" not in existing_cols:
+        db.execute("ALTER TABLE activities ADD COLUMN person_weight_kg REAL")
+    if "person_sex" not in existing_cols:
+        db.execute("ALTER TABLE activities ADD COLUMN person_sex TEXT")
+    if "person_birth_year" not in existing_cols:
+        db.execute("ALTER TABLE activities ADD COLUMN person_birth_year INTEGER")
+    # score and weather_multiplier kept for legacy but no longer written
+    if "score" not in existing_cols:
+        db.execute("ALTER TABLE activities ADD COLUMN score REAL")
     if "weather_multiplier" not in existing_cols:
         db.execute("ALTER TABLE activities ADD COLUMN weather_multiplier REAL")
 
@@ -159,9 +166,12 @@ CREATE TABLE IF NOT EXISTS activities (
     notes TEXT,
     details TEXT DEFAULT '{}',
     person TEXT,
-    score REAL,
+    person_weight_kg REAL,
+    person_sex TEXT,
+    person_birth_year INTEGER,
     weather_temp_c REAL,
     weather_humidity REAL,
+    score REAL,
     weather_multiplier REAL
 );
 

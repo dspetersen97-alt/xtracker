@@ -1,4 +1,3 @@
-﻿import json
 from datetime import date
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
@@ -13,10 +12,37 @@ from ..models import (
     get_people,
     get_person_by_name,
     get_units,
-    update_activity_score,
+    update_activity,
 )
+import json
 from ..scoring import score_activity
 from ..units import convert_activity_for_display
+
+
+def _compute_score(activity):
+    """Compute score dynamically from the activity's stored snapshot fields.
+    Modifies activity dict in place to add 'computed_score' and 'weather_multiplier_computed'.
+    """
+    if activity.get("activity_type") not in ("run", "walk", "hike"):
+        activity["computed_score"] = None
+        activity["weather_multiplier_computed"] = None
+        return activity
+
+    # Build a person profile from the snapshot stored on the activity
+    person_profile = {
+        "weight_kg": activity.get("person_weight_kg"),
+        "sex": activity.get("person_sex"),
+        "birth_year": activity.get("person_birth_year"),
+    }
+
+    result = score_activity(activity, person_profile)
+    if result:
+        activity["computed_score"] = result["final_score"]
+        activity["weather_multiplier_computed"] = result["weather_multiplier"]
+    else:
+        activity["computed_score"] = None
+        activity["weather_multiplier_computed"] = None
+    return activity
 
 activities_bp = Blueprint("activities", __name__)
 
@@ -182,6 +208,13 @@ def log_workout_submit():
             pass
 
     person_name = request.form.get("person", "").strip() or None
+
+    # Snapshot person profile at time of logging
+    person_profile = get_person_by_name(person_name) if person_name else None
+    person_weight_kg = person_profile["weight_kg"] if person_profile else None
+    person_sex = person_profile["sex"] if person_profile else None
+    person_birth_year = person_profile["birth_year"] if person_profile else None
+
     activity_id = create_activity(
         activity_date=activity_date,
         activity_type=activity_type,
@@ -191,29 +224,12 @@ def log_workout_submit():
         notes=notes or None,
         details=details if details else None,
         person=person_name,
+        person_weight_kg=person_weight_kg,
+        person_sex=person_sex,
+        person_birth_year=person_birth_year,
+        weather_temp_c=weather_temp_c,
+        weather_humidity=weather_humidity,
     )
-
-    # Calculate and store score
-    if activity_type in ("run", "walk", "hike") and activity_id:
-        person_profile = get_person_by_name(person_name) if person_name else None
-        activity_data = {
-            "activity_type": activity_type,
-            "distance_km": distance_val,
-            "total_ascent_m": details.get("elevation_gain_m") if details else None,
-            "duration_minutes": duration_val,
-            "avg_hr": None,  # not captured in manual log form currently
-            "weather_temp_c": weather_temp_c,
-            "weather_humidity": weather_humidity,
-        }
-        result = score_activity(activity_data, person_profile)
-        if result:
-            update_activity_score(
-                activity_id,
-                score=result["final_score"],
-                weather_temp_c=weather_temp_c,
-                weather_humidity=weather_humidity,
-                weather_multiplier=result["weather_multiplier"],
-            )
 
     flash("Workout logged successfully!", "success")
     return redirect(url_for("activities.history"))
@@ -250,8 +266,8 @@ def history():
     exercise_types = get_exercise_types()
     units = get_units()
 
-    # Convert activities for display
-    display_activities = [convert_activity_for_display(a, units) for a in activities]
+    # Convert activities for display and compute scores dynamically
+    display_activities = [_compute_score(convert_activity_for_display(a, units)) for a in activities]
 
     people = get_people()
     return render_template(
@@ -279,7 +295,7 @@ def activity_detail(activity_id):
         return redirect(url_for("activities.history"))
 
     units = get_units()
-    display = convert_activity_for_display(activity, units)
+    display = _compute_score(convert_activity_for_display(activity, units))
     return render_template("activity_detail.html", activity=display, units=units)
 
 
@@ -291,3 +307,135 @@ def activity_delete(activity_id):
     else:
         flash("Activity not found.", "error")
     return redirect(url_for("activities.history"))
+
+
+@activities_bp.route("/history/<int:activity_id>/edit", methods=["GET"])
+def activity_edit(activity_id):
+    """Show the edit form for an activity."""
+    activity = get_activity_by_id(activity_id)
+    if activity is None:
+        flash("Activity not found.", "error")
+        return redirect(url_for("activities.history"))
+
+    exercise_types = get_exercise_types()
+    people = get_people()
+    units = get_units()
+    units_label = "F" if units == "imperial" else "C"
+    return render_template(
+        "activity_edit.html",
+        activity=activity,
+        exercise_types=exercise_types,
+        people=people,
+        units=units,
+        units_label=units_label,
+    )
+
+
+@activities_bp.route("/history/<int:activity_id>/edit", methods=["POST"])
+def activity_edit_submit(activity_id):
+    """Process the edit form."""
+    activity = get_activity_by_id(activity_id)
+    if activity is None:
+        flash("Activity not found.", "error")
+        return redirect(url_for("activities.history"))
+
+    # Parse all fields from form
+    updates = {}
+
+    activity_type = request.form.get("activity_type", "").strip()
+    if activity_type:
+        updates["activity_type"] = activity_type
+
+    activity_date = request.form.get("activity_date", "").strip()
+    if activity_date:
+        updates["activity_date"] = activity_date
+
+    title = request.form.get("title", "").strip()
+    updates["title"] = title or None
+
+    person_name = request.form.get("person", "").strip()
+    updates["person"] = person_name or None
+
+    # Update person snapshot if person changed
+    if person_name:
+        person_profile = get_person_by_name(person_name)
+        if person_profile:
+            updates["person_weight_kg"] = person_profile["weight_kg"]
+            updates["person_sex"] = person_profile["sex"]
+            updates["person_birth_year"] = person_profile["birth_year"]
+
+    # Numeric fields
+    duration = request.form.get("duration_minutes", "").strip()
+    updates["duration_minutes"] = float(duration) if duration else None
+
+    distance = request.form.get("distance_km", "").strip()
+    updates["distance_km"] = float(distance) if distance else None
+
+    calories = request.form.get("calories", "").strip()
+    updates["calories"] = int(calories) if calories else None
+
+    avg_hr = request.form.get("avg_hr", "").strip()
+    updates["avg_hr"] = int(avg_hr) if avg_hr else None
+
+    max_hr = request.form.get("max_hr", "").strip()
+    updates["max_hr"] = int(max_hr) if max_hr else None
+
+    total_ascent = request.form.get("total_ascent_m", "").strip()
+    updates["total_ascent_m"] = float(total_ascent) if total_ascent else None
+
+    total_descent = request.form.get("total_descent_m", "").strip()
+    updates["total_descent_m"] = float(total_descent) if total_descent else None
+
+    steps = request.form.get("steps", "").strip()
+    updates["steps"] = int(steps) if steps else None
+
+    min_elev = request.form.get("min_elevation_m", "").strip()
+    updates["min_elevation_m"] = float(min_elev) if min_elev else None
+
+    max_elev = request.form.get("max_elevation_m", "").strip()
+    updates["max_elevation_m"] = float(max_elev) if max_elev else None
+
+    notes = request.form.get("notes", "").strip()
+    updates["notes"] = notes or None
+
+    # Weather
+    units = get_units()
+    weather_temp_raw = request.form.get("weather_temp", "").strip()
+    weather_humidity_raw = request.form.get("weather_humidity", "").strip()
+
+    if weather_temp_raw:
+        temp_val = float(weather_temp_raw)
+        if units == "imperial":
+            updates["weather_temp_c"] = (temp_val - 32) * 5 / 9
+        else:
+            updates["weather_temp_c"] = temp_val
+    else:
+        updates["weather_temp_c"] = None
+
+    updates["weather_humidity"] = float(weather_humidity_raw) if weather_humidity_raw else None
+
+    # Strength exercises (stored in details JSON)
+    if activity_type == "strength":
+        exercise_names = request.form.getlist("exercise_name[]")
+        exercise_sets = request.form.getlist("exercise_sets[]")
+        exercise_reps = request.form.getlist("exercise_reps[]")
+        exercise_weights = request.form.getlist("exercise_weight[]")
+        exercises = []
+        for i, name in enumerate(exercise_names):
+            name = name.strip()
+            if not name:
+                continue
+            ex = {"name": name}
+            if i < len(exercise_sets) and exercise_sets[i].strip():
+                ex["sets"] = int(exercise_sets[i])
+            if i < len(exercise_reps) and exercise_reps[i].strip():
+                ex["reps"] = int(exercise_reps[i])
+            if i < len(exercise_weights) and exercise_weights[i].strip():
+                ex["weight_kg"] = float(exercise_weights[i])
+            exercises.append(ex)
+        import json as json_mod
+        updates["details"] = json_mod.dumps({"exercises": exercises})
+
+    update_activity(activity_id, **updates)
+    flash("Workout updated.", "success")
+    return redirect(url_for("activities.activity_detail", activity_id=activity_id))

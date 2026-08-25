@@ -3,7 +3,6 @@ import csv
 import io
 
 from .database import get_db
-from .scoring import score_activity
 from .units import (
     feet_to_meters,
     miles_to_km,
@@ -63,13 +62,19 @@ def import_garmin_csv(file_content, source_units="imperial", person=None):
     db = get_db()
     reader = csv.DictReader(io.StringIO(file_content))
 
+    # Resolve person profile once for the entire import
+    person_profile = None
+    if person:
+        from .models import get_person_by_name
+        person_profile = get_person_by_name(person)
+
     imported = 0
     skipped = 0
     errors = []
 
     for i, row in enumerate(reader, start=2):
         try:
-            result = _import_row(db, row, source_units, person)
+            result = _import_row(db, row, source_units, person, person_profile)
             if result:
                 imported += 1
             else:
@@ -79,48 +84,11 @@ def import_garmin_csv(file_content, source_units="imperial", person=None):
             skipped += 1
 
     db.commit()
-
-    # Score imported activities
-    if person and imported > 0:
-        _score_recent_imports(db, person, imported)
-        db.commit()
-
     return {"imported": imported, "skipped": skipped, "errors": errors}
 
 
-def _score_recent_imports(db, person, count):
-    """Score the most recently imported activities for the given person."""
-    from .models import get_person_by_name
-    person_profile = get_person_by_name(person)
-    if not person_profile:
-        return
 
-    rows = db.execute(
-        """SELECT id, activity_type, distance_km, total_ascent_m,
-               duration_minutes, avg_hr FROM activities
-         WHERE person = ? ORDER BY id DESC LIMIT ?""",
-        (person, count),
-    ).fetchall()
-
-    for row in rows:
-        activity_data = {
-            "activity_type": row[1],
-            "distance_km": row[2],
-            "total_ascent_m": row[3],
-            "duration_minutes": row[4],
-            "avg_hr": row[5],
-            "weather_temp_c": None,
-            "weather_humidity": None,
-        }
-        result = score_activity(activity_data, person_profile)
-        if result:
-            db.execute(
-                "UPDATE activities SET score = ? WHERE id = ?",
-                (result["final_score"], row[0]),
-            )
-
-
-def _import_row(db, row, source_units, person=None):
+def _import_row(db, row, source_units, person=None, person_profile=None):
     """Import a single CSV row. Returns True if imported, False if skipped."""
     # Activity type mapping
     raw_type = row.get("Activity Type", "").strip().lower()
@@ -199,17 +167,24 @@ def _import_row(db, row, source_units, person=None):
     # Steps
     steps = _parse_int(row.get("Steps", ""))
 
+    # Person snapshot
+    p_weight = person_profile["weight_kg"] if person_profile else None
+    p_sex = person_profile["sex"] if person_profile else None
+    p_birth_year = person_profile["birth_year"] if person_profile else None
+
     # Insert
     db.execute(
         """INSERT INTO activities (
             activity_date, activity_type, title, duration_minutes, distance_km,
             calories, avg_hr, max_hr, avg_pace_sec_per_km, best_pace_sec_per_km,
             total_ascent_m, total_descent_m, steps, elapsed_time_minutes,
-            min_elevation_m, max_elevation_m, notes, details, person
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', ?)""",
+            min_elevation_m, max_elevation_m, notes, details, person,
+            person_weight_kg, person_sex, person_birth_year
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', ?, ?, ?, ?)""",
         (activity_date, activity_type, title, duration_minutes, distance_km,
          calories, avg_hr, max_hr, avg_pace_sec_per_km, best_pace_sec_per_km,
          total_ascent_m, total_descent_m, steps, elapsed_time_minutes,
-         min_elevation_m, max_elevation_m, None, person),
+         min_elevation_m, max_elevation_m, None, person,
+         p_weight, p_sex, p_birth_year),
     )
     return True

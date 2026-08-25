@@ -13,7 +13,9 @@ def create_activity(activity_date, activity_type, duration_minutes=None,
                     avg_pace_sec_per_km=None, best_pace_sec_per_km=None,
                     total_ascent_m=None, total_descent_m=None, steps=None,
                     elapsed_time_minutes=None, min_elevation_m=None,
-                    max_elevation_m=None, person=None):
+                    max_elevation_m=None, person=None,
+                    person_weight_kg=None, person_sex=None, person_birth_year=None,
+                    weather_temp_c=None, weather_humidity=None):
     """Create a new activity record. Returns the new activity's ID."""
     db = get_db()
     details_json = json.dumps(details) if details else "{}"
@@ -22,12 +24,16 @@ def create_activity(activity_date, activity_type, duration_minutes=None,
            duration_minutes, distance_km, calories, avg_hr, max_hr,
            avg_pace_sec_per_km, best_pace_sec_per_km, total_ascent_m,
            total_descent_m, steps, elapsed_time_minutes, min_elevation_m,
-           max_elevation_m, notes, details, person)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           max_elevation_m, notes, details, person,
+           person_weight_kg, person_sex, person_birth_year,
+           weather_temp_c, weather_humidity)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (activity_date, activity_type, title, duration_minutes, distance_km,
          calories, avg_hr, max_hr, avg_pace_sec_per_km, best_pace_sec_per_km,
          total_ascent_m, total_descent_m, steps, elapsed_time_minutes,
-         min_elevation_m, max_elevation_m, notes, details_json, person),
+         min_elevation_m, max_elevation_m, notes, details_json, person,
+         person_weight_kg, person_sex, person_birth_year,
+         weather_temp_c, weather_humidity),
     )
     db.commit()
     return cursor.lastrowid
@@ -250,13 +256,27 @@ def delete_person(person_id):
 
 
 
-def update_activity_score(activity_id, score, weather_temp_c=None,
-                          weather_humidity=None, weather_multiplier=None):
-    """Update the score and weather data for an activity."""
+def update_activity(activity_id, **kwargs):
+    """Update an activity's fields. Pass column=value pairs as kwargs."""
     db = get_db()
-    db.execute(
-        """UPDATE activities SET score = ?, weather_temp_c = ?,
-           weather_humidity = ?, weather_multiplier = ? WHERE id = ?""",
-        (score, weather_temp_c, weather_humidity, weather_multiplier, activity_id),
-    )
+    allowed = {
+        "activity_date", "activity_type", "title", "duration_minutes",
+        "distance_km", "calories", "avg_hr", "max_hr",
+        "avg_pace_sec_per_km", "best_pace_sec_per_km",
+        "total_ascent_m", "total_descent_m", "steps",
+        "elapsed_time_minutes", "min_elevation_m", "max_elevation_m",
+        "notes", "details", "person",
+        "person_weight_kg", "person_sex", "person_birth_year",
+        "weather_temp_c", "weather_humidity",
+    }
+    fields = []
+    params = []
+    for key, value in kwargs.items():
+        if key in allowed:
+            fields.append(f"{key} = ?")
+            params.append(value)
+    if not fields:
+        return
+    params.append(activity_id)
+    db.execute(f"UPDATE activities SET {', '.join(fields)} WHERE id = ?", params)
     db.commit()
