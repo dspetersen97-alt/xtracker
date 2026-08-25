@@ -17,10 +17,7 @@ def create_app(config_overrides=None):
 
     app.secret_key = app.config["SECRET_KEY"]
 
-    # Ensure data directory exists
-    os.makedirs(app.config["DATA_DIR"], exist_ok=True)
-
-    # Initialize database
+    # Initialize database (handles data dir creation and validation)
     from .database import init_db
     with app.app_context():
         init_db(app)

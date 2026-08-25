@@ -1,5 +1,7 @@
 import os
 import sqlite3
+import sys
+
 from flask import g, current_app
 
 
@@ -23,13 +25,37 @@ def close_db(e=None):
         db.close()
 
 
+def _ensure_data_dir(db_path):
+    """Ensure the data directory exists and is writable.
+
+    Creates the directory with user-writable permissions if it doesn't exist.
+    Raises a clear error if the directory exists but isn't writable.
+    """
+    data_dir = os.path.dirname(os.path.abspath(db_path))
+
+    if not os.path.exists(data_dir):
+        try:
+            os.makedirs(data_dir, mode=0o755, exist_ok=True)
+        except OSError as e:
+            sys.exit(
+                f"ERROR: Cannot create data directory '{data_dir}': {e}\n"
+                f"Please create it manually with: mkdir -p {data_dir}"
+            )
+
+    if not os.access(data_dir, os.W_OK):
+        sys.exit(
+            f"ERROR: Data directory '{data_dir}' is not writable.\n"
+            f"Fix with: chmod 755 {data_dir}\n"
+            f"Or: sudo chown your_username {data_dir}"
+        )
+
+
 def init_db(app):
     """Initialize the database schema and seed data."""
     app.teardown_appcontext(close_db)
 
-    # Ensure the directory for the DB file exists
     db_path = app.config["DB_PATH"]
-    os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
+    _ensure_data_dir(db_path)
 
     db = sqlite3.connect(db_path)
     db.execute("PRAGMA journal_mode=WAL")
