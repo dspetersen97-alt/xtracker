@@ -433,9 +433,13 @@ def sync_daily_health(person_name, days_back=30):
     synced = 0
     errors = []
 
+    total_days = (end_date - start_date).days + 1
     current = start_date
+    day_num = 0
     while current <= end_date:
+        day_num += 1
         date_str = current.isoformat()
+        _set_sync_status(f"Syncing health data... ({day_num}/{total_days}) {date_str}")
         try:
             health_data = _fetch_daily_health(garmin, date_str)
             if health_data:
@@ -525,3 +529,88 @@ def _fetch_daily_health(garmin, date_str):
 
     # Filter out None values
     return {k: v for k, v in data.items() if v is not None}
+
+
+
+# --- Sync progress tracking ---
+
+
+def _set_sync_status(message):
+    """Update the current sync status message (for UI polling)."""
+    try:
+        set_setting("_sync_status", message)
+    except Exception:
+        pass
+
+
+def get_sync_status():
+    """Get the current sync status message."""
+    return get_setting("_sync_status", "")
+
+
+def clear_sync_status():
+    """Clear the sync status."""
+    try:
+        set_setting("_sync_status", "")
+    except Exception:
+        pass
+
+
+def sync_all(person_name=None, days_back=30):
+    """Unified sync: activities + health + weather, with progress reporting.
+
+    This is the main entry point called by the sync-all route.
+    """
+    results = {"messages": [], "errors": []}
+
+    # Step 1: Connect
+    _set_sync_status("Connecting to Garmin...")
+    email, password = get_garmin_credentials()
+    if not email or not password:
+        results["errors"].append("No Garmin credentials configured.")
+        clear_sync_status()
+        return results
+
+    try:
+        from garminconnect import Garmin
+        token_dir = _get_token_dir()
+        garmin = Garmin(email=email, password=password)
+        garmin.login(token_dir)
+    except Exception as e:
+        results["errors"].append(f"Connection failed: {str(e)}")
+        clear_sync_status()
+        return results
+
+    # Step 2: Sync activities
+    _set_sync_status("Fetching activities from Garmin...")
+    act_result = sync_activities(person_name=person_name, days_back=days_back)
+    if act_result["imported"] > 0:
+        msg = f"Synced {act_result['imported']} new activities."
+        if act_result.get("weather_filled"):
+            msg += f" Weather added for {act_result['weather_filled']}."
+        results["messages"].append(msg)
+    if act_result["errors"]:
+        results["errors"].extend(act_result["errors"][:3])
+
+    # Step 3: Sync health data
+    if person_name:
+        _set_sync_status("Syncing daily health data...")
+        from .models import upsert_daily_health as _upsert  # ensure import
+        health_result = sync_daily_health(person_name=person_name, days_back=days_back)
+        if health_result["synced"] > 0:
+            results["messages"].append(f"Health data synced for {health_result['synced']} days.")
+        if health_result["errors"]:
+            results["errors"].extend(health_result["errors"][:3])
+
+    # Step 4: Backfill weather
+    _set_sync_status("Fetching weather data for activities...")
+    weather_filled = _backfill_weather(get_db())
+    if weather_filled > 0:
+        get_db().commit()
+        results["messages"].append(f"Weather backfilled for {weather_filled} activities.")
+
+    # Done
+    set_last_sync_time()
+    _set_sync_status("Sync complete!")
+
+    return results

@@ -1,14 +1,17 @@
 import json
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 
 from ..garmin_sync import (
+    backfill_all_weather,
     clear_garmin_credentials,
+    clear_sync_status,
     get_garmin_credentials,
     get_last_sync_time,
+    get_sync_status,
     save_garmin_credentials,
-    backfill_all_weather,
     sync_activities,
+    sync_all,
     sync_daily_health,
     test_connection as garmin_test_connection,
 )
@@ -392,39 +395,23 @@ def garmin_sync_all():
     except ValueError:
         days = 30
 
-    messages = []
-    errors = []
-
-    # 1. Sync activities
-    result = sync_activities(person_name=person, days_back=days)
-    if result["imported"] > 0:
-        msg = f"Synced {result['imported']} new activities."
-        if result.get("weather_filled"):
-            msg += f" Weather added for {result['weather_filled']}."
-        messages.append(msg)
-    if result["errors"]:
-        errors.extend(result["errors"][:3])
-
-    # 2. Sync health data (requires person)
-    if person:
-        health_result = sync_daily_health(person_name=person, days_back=days)
-        if health_result["synced"] > 0:
-            messages.append(f"Health data synced for {health_result['synced']} days.")
-        if health_result["errors"]:
-            errors.extend(health_result["errors"][:3])
-
-    # 3. Backfill weather for any remaining activities
-    weather_filled = backfill_all_weather()
-    if weather_filled > 0:
-        messages.append(f"Weather backfilled for {weather_filled} activities.")
+    results = sync_all(person_name=person, days_back=days)
 
     # Flash results
-    if messages:
-        flash(" ".join(messages), "success")
-    elif not errors:
+    if results["messages"]:
+        flash(" ".join(results["messages"]), "success")
+    elif not results["errors"]:
         flash("Everything up to date. No new data to sync.", "success")
 
-    for err in errors[:5]:
+    for err in results["errors"][:5]:
         flash(err, "error")
 
+    clear_sync_status()
     return redirect(url_for("settings.exercise_types"))
+
+
+@settings_bp.route("/settings/garmin/sync-status")
+def garmin_sync_status():
+    """Polling endpoint for sync progress (returns JSON)."""
+    status = get_sync_status()
+    return jsonify({"status": status})

@@ -131,3 +131,34 @@ button[aria-busy="true"] {
     opacity: 0.7;
     pointer-events: none;
 }
+
+
+/* Settings collapsible sections */
+.settings-section {
+    border: 1px solid var(--pico-muted-border-color);
+    border-radius: var(--pico-border-radius);
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+}
+
+.settings-section > summary {
+    list-style: none;
+    cursor: pointer;
+    user-select: none;
+}
+
+.settings-section > summary::-webkit-details-marker {
+    display: none;
+}
+
+.settings-section > summary::before {
+    content: "\25B6";
+    display: inline-block;
+    margin-right: 0.5rem;
+    font-size: 0.7em;
+    transition: transform 0.2s;
+}
+
+.settings-section[open] > summary::before {
+    transform: rotate(90deg);
+}

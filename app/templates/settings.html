@@ -4,32 +4,36 @@
 {% block content %}
 <h1>Settings</h1>
 
-<!-- Unit Toggle -->
-<article>
-    <header><h2>Units</h2></header>
-    <form method="POST" action="{{ url_for('settings.toggle_units') }}">
-        <fieldset role="group">
-            <select name="units" aria-label="Select unit system">
-                <option value="metric" {% if units == 'metric' %}selected{% endif %}>Metric (km, meters)</option>
-                <option value="imperial" {% if units == 'imperial' %}selected{% endif %}>Imperial (miles, feet)</option>
-            </select>
-            <button type="submit">Save</button>
-        </fieldset>
-    </form>
-</article>
+<!-- Units -->
+<details class="settings-section" data-section="units">
+    <summary><h2 style="display: inline; font-size: 1.2rem;">Units</h2></summary>
+    <div style="margin-top: 1rem;">
+        <form method="POST" action="{{ url_for('settings.toggle_units') }}">
+            <fieldset role="group">
+                <select name="units" aria-label="Select unit system">
+                    <option value="metric" {% if units == 'metric' %}selected{% endif %}>Metric (km, meters)</option>
+                    <option value="imperial" {% if units == 'imperial' %}selected{% endif %}>Imperial (miles, feet)</option>
+                </select>
+                <button type="submit">Save</button>
+            </fieldset>
+        </form>
+    </div>
+</details>
 
-<!-- Data Import -->
-<article>
-    <header><h2>Import Data</h2></header>
-    <p>Import activities from a Garmin Connect CSV export.</p>
-    <a href="{{ url_for('settings.import_page') }}" role="button" class="outline">Import CSV</a>
-</article>
+<!-- Import Data -->
+<details class="settings-section" data-section="import">
+    <summary><h2 style="display: inline; font-size: 1.2rem;">Import Data</h2></summary>
+    <div style="margin-top: 1rem;">
+        <p>Import activities from a Garmin Connect CSV export.</p>
+        <a href="{{ url_for('settings.import_page') }}" role="button" class="outline">Import CSV</a>
+    </div>
+</details>
 
 <!-- Garmin Connect -->
-<details {% if garmin_connected %}open{% endif %}>
+<details class="settings-section" data-section="garmin">
     <summary style="display: flex; align-items: center; gap: 0.75rem; cursor: pointer;">
         <img src="{{ url_for('static', filename='images/garmin_connect.png') }}" alt="Garmin Connect" style="height: 28px; width: auto;">
-        <span style="font-weight: 600;">Garmin Connect</span>
+        <span style="font-weight: 600; font-size: 1.2rem;">Garmin Connect</span>
         {% if garmin_connected %}
         <small style="color: var(--pico-muted-color); margin-left: auto;">Connected</small>
         {% endif %}
@@ -69,6 +73,7 @@
                 <span id="sync-btn-text">Sync</span>
                 <span id="sync-spinner" style="display: none;" aria-hidden="true"></span>
             </button>
+            <p id="sync-status" style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--pico-muted-color); display: none;" aria-live="polite"></p>
         </form>
 
         <!-- Disconnect -->
@@ -99,158 +104,217 @@
     {% endif %}
     </div>
 </details>
+
 <!-- People -->
-<article>
-    <header><h2>People</h2></header>
-    {% if people %}
-    {% for p in people %}
-    <details>
-        <summary><strong>{{ p.name }}</strong>
-            {% if p.weight_kg %} &middot; {% if units == 'imperial' %}{{ (p.weight_kg * 2.20462) | round(1) }}lbs{% else %}{{ p.weight_kg }}kg{% endif %}{% endif %}
-            {% if p.sex %} &middot; {{ p.sex | capitalize }}{% endif %}
-        </summary>
-        <form method="POST" action="{{ url_for('settings.edit_person', person_id=p.id) }}">
+<details class="settings-section" data-section="people">
+    <summary><h2 style="display: inline; font-size: 1.2rem;">People</h2></summary>
+    <div style="margin-top: 1rem;">
+        {% if people %}
+        {% for p in people %}
+        <details>
+            <summary><strong>{{ p.name }}</strong>
+                {% if p.weight_kg %} &middot; {% if units == 'imperial' %}{{ (p.weight_kg * 2.20462) | round(1) }}lbs{% else %}{{ p.weight_kg }}kg{% endif %}{% endif %}
+                {% if p.sex %} &middot; {{ p.sex | capitalize }}{% endif %}
+            </summary>
+            <form method="POST" action="{{ url_for('settings.edit_person', person_id=p.id) }}">
+                <div class="grid">
+                    <div>
+                        <label>Name</label>
+                        <input type="text" name="name" value="{{ p.name }}" required>
+                    </div>
+                    <div>
+                        <label>Sex</label>
+                        <select name="sex">
+                            <option value="">--</option>
+                            <option value="male" {% if p.sex == 'male' %}selected{% endif %}>Male</option>
+                            <option value="female" {% if p.sex == 'female' %}selected{% endif %}>Female</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid">
+                    <div>
+                        <label>Weight ({% if units == 'imperial' %}lbs{% else %}kg{% endif %})</label>
+                        <input type="number" name="weight" step="0.1" min="0" value="{% if p.weight_kg %}{% if units == 'imperial' %}{{ (p.weight_kg * 2.20462) | round(1) }}{% else %}{{ p.weight_kg }}{% endif %}{% endif %}">
+                    </div>
+                    <div>
+                        <label>Height ({% if units == 'imperial' %}in{% else %}cm{% endif %})</label>
+                        <input type="number" name="height" step="0.1" min="0" value="{% if p.height_cm %}{% if units == 'imperial' %}{{ (p.height_cm / 2.54) | round(1) }}{% else %}{{ p.height_cm }}{% endif %}{% endif %}">
+                    </div>
+                    <div>
+                        <label>Birth Year</label>
+                        <input type="number" name="birth_year" min="1900" max="2025" value="{{ p.birth_year or '' }}">
+                    </div>
+                </div>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button type="submit" class="outline">Save Profile</button>
+                    <form method="POST" action="{{ url_for('settings.remove_person', person_id=p.id) }}"
+                          onsubmit="return confirm('Remove this person and their profile?');" style="display: inline; margin: 0;">
+                        <button type="submit" class="secondary outline">Remove</button>
+                    </form>
+                </div>
+            </form>
+        </details>
+        {% endfor %}
+        {% else %}
+        <p><small>No people added yet.</small></p>
+        {% endif %}
+        <hr>
+        <h4>Add Person</h4>
+        <form method="POST" action="{{ url_for('settings.add_person') }}">
             <div class="grid">
                 <div>
                     <label>Name</label>
-                    <input type="text" name="name" value="{{ p.name }}" required>
+                    <input type="text" name="name" placeholder="Name" required>
                 </div>
                 <div>
                     <label>Sex</label>
                     <select name="sex">
                         <option value="">--</option>
-                        <option value="male" {% if p.sex == 'male' %}selected{% endif %}>Male</option>
-                        <option value="female" {% if p.sex == 'female' %}selected{% endif %}>Female</option>
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
                     </select>
                 </div>
             </div>
             <div class="grid">
                 <div>
                     <label>Weight ({% if units == 'imperial' %}lbs{% else %}kg{% endif %})</label>
-                    <input type="number" name="weight" step="0.1" min="0" value="{% if p.weight_kg %}{% if units == 'imperial' %}{{ (p.weight_kg * 2.20462) | round(1) }}{% else %}{{ p.weight_kg }}{% endif %}{% endif %}">
+                    <input type="number" name="weight" step="0.1" min="0" placeholder="{% if units == 'imperial' %}e.g. 165{% else %}e.g. 75{% endif %}">
                 </div>
                 <div>
                     <label>Height ({% if units == 'imperial' %}in{% else %}cm{% endif %})</label>
-                    <input type="number" name="height" step="0.1" min="0" value="{% if p.height_cm %}{% if units == 'imperial' %}{{ (p.height_cm / 2.54) | round(1) }}{% else %}{{ p.height_cm }}{% endif %}{% endif %}">
+                    <input type="number" name="height" step="0.1" min="0" placeholder="{% if units == 'imperial' %}e.g. 70{% else %}e.g. 178{% endif %}">
                 </div>
                 <div>
                     <label>Birth Year</label>
-                    <input type="number" name="birth_year" min="1900" max="2025" value="{{ p.birth_year or '' }}">
+                    <input type="number" name="birth_year" min="1900" max="2025" placeholder="e.g. 1990">
                 </div>
             </div>
-            <div style="display: flex; gap: 0.5rem;">
-                <button type="submit" class="outline">Save Profile</button>
-                <form method="POST" action="{{ url_for('settings.remove_person', person_id=p.id) }}"
-                      onsubmit="return confirm('Remove this person and their profile?');" style="display: inline; margin: 0;">
-                    <button type="submit" class="secondary outline">Remove</button>
-                </form>
-            </div>
+            <button type="submit" class="outline">Add Person</button>
         </form>
-    </details>
-    {% endfor %}
-    {% else %}
-    <p><small>No people added yet.</small></p>
-    {% endif %}
-    <hr>
-    <h4>Add Person</h4>
-    <form method="POST" action="{{ url_for('settings.add_person') }}">
-        <div class="grid">
-            <div>
-                <label>Name</label>
-                <input type="text" name="name" placeholder="Name" required>
-            </div>
-            <div>
-                <label>Sex</label>
-                <select name="sex">
-                    <option value="">--</option>
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
-                </select>
-            </div>
-        </div>
-        <div class="grid">
-            <div>
-                <label>Weight ({% if units == 'imperial' %}lbs{% else %}kg{% endif %})</label>
-                <input type="number" name="weight" step="0.1" min="0" placeholder="{% if units == 'imperial' %}e.g. 165{% else %}e.g. 75{% endif %}">
-            </div>
-            <div>
-                <label>Height ({% if units == 'imperial' %}in{% else %}cm{% endif %})</label>
-                <input type="number" name="height" step="0.1" min="0" placeholder="{% if units == 'imperial' %}e.g. 70{% else %}e.g. 178{% endif %}">
-            </div>
-            <div>
-                <label>Birth Year</label>
-                <input type="number" name="birth_year" min="1900" max="2025" placeholder="e.g. 1990">
-            </div>
-        </div>
-        <button type="submit" class="outline">Add Person</button>
-    </form>
-</article>
+    </div>
+</details>
 
 <!-- Exercise Types -->
-<h2>Exercise Types</h2>
+<details class="settings-section" data-section="exercise-types">
+    <summary><h2 style="display: inline; font-size: 1.2rem;">Exercise Types</h2></summary>
+    <div style="margin-top: 1rem;">
+        <a href="{{ url_for('settings.new_exercise_type') }}" role="button" class="outline" style="margin-bottom: 1rem; display: inline-block;">
+            + Add Custom Type
+        </a>
 
-<a href="{{ url_for('settings.new_exercise_type') }}" role="button" class="outline" style="margin-bottom: 1rem; display: inline-block;">
-    + Add Custom Type
-</a>
+        <figure>
+            <table role="grid">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Category</th>
+                        <th>Fields</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for et in exercise_types %}
+                    <tr>
+                        <td>
+                            <strong>{{ et.name | capitalize }}</strong>
+                            {% if et.is_default %}
+                            <small>(default)</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge badge-{{ et.category }}">{{ et.category | capitalize }}</span>
+                        </td>
+                        <td>
+                            <small>{{ et.fields | replace('[', '') | replace(']', '') | replace('"', '') }}</small>
+                        </td>
+                        <td>
+                            {% if not et.is_default %}
+                            <form method="POST" action="{{ url_for('settings.delete_type', type_id=et.id) }}"
+                                  onsubmit="return confirm('Delete this exercise type?');"
+                                  style="display: inline;">
+                                <button type="submit" class="secondary outline" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">
+                                    Delete
+                                </button>
+                            </form>
+                            {% else %}
+                            <small>-</small>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </figure>
+    </div>
+</details>
 
-<figure>
-    <table role="grid">
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>Category</th>
-                <th>Fields</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for et in exercise_types %}
-            <tr>
-                <td>
-                    <strong>{{ et.name | capitalize }}</strong>
-                    {% if et.is_default %}
-                    <small>(default)</small>
-                    {% endif %}
-                </td>
-                <td>
-                    <span class="badge badge-{{ et.category }}">{{ et.category | capitalize }}</span>
-                </td>
-                <td>
-                    <small>{{ et.fields | replace('[', '') | replace(']', '') | replace('"', '') }}</small>
-                </td>
-                <td>
-                    {% if not et.is_default %}
-                    <form method="POST" action="{{ url_for('settings.delete_type', type_id=et.id) }}"
-                          onsubmit="return confirm('Delete this exercise type?');"
-                          style="display: inline;">
-                        <button type="submit" class="secondary outline" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">
-                            Delete
-                        </button>
-                    </form>
-                    {% else %}
-                    <small>-</small>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</figure>
 {% endblock %}
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    var syncForm = document.getElementById('garmin-sync-form');
-    if (syncForm) {
-        syncForm.addEventListener('submit', function() {
-            var btn = document.getElementById('sync-btn');
-            var text = document.getElementById('sync-btn-text');
-            var spinner = document.getElementById('sync-spinner');
-            btn.setAttribute('aria-busy', 'true');
-            text.textContent = 'Syncing...';
-            spinner.style.display = 'inline-block';
+    // --- Collapsible section state persistence ---
+    var STORAGE_KEY = 'xtracker_settings_sections';
+    var sections = document.querySelectorAll('.settings-section');
+
+    // Load saved state from localStorage
+    var savedState = {};
+    try {
+        var stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) savedState = JSON.parse(stored);
+    } catch(e) {}
+
+    // Apply saved state (default is collapsed)
+    sections.forEach(function(section) {
+        var key = section.getAttribute('data-section');
+        if (savedState[key] === true) {
+            section.setAttribute('open', '');
+        } else {
+            section.removeAttribute('open');
+        }
+    });
+
+    // Save state on toggle
+    sections.forEach(function(section) {
+        section.addEventListener('toggle', function() {
+            var key = section.getAttribute('data-section');
+            savedState[key] = section.open;
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(savedState));
+            } catch(e) {}
         });
+    });
+
+    // --- Garmin sync spinner + status polling ---
+    var syncForm = document.getElementById('garmin-sync-form');
+    if (!syncForm) return;
+
+    var btn = document.getElementById('sync-btn');
+    var text = document.getElementById('sync-btn-text');
+    var spinner = document.getElementById('sync-spinner');
+    var statusEl = document.getElementById('sync-status');
+    var pollInterval = null;
+
+    function startPolling() {
+        statusEl.style.display = 'block';
+        statusEl.textContent = 'Starting sync...';
+        pollInterval = setInterval(function() {
+            fetch('/settings/garmin/sync-status')
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.status) {
+                        statusEl.textContent = data.status;
+                    }
+                })
+                .catch(function() {});
+        }, 800);
     }
+
+    syncForm.addEventListener('submit', function() {
+        btn.setAttribute('aria-busy', 'true');
+        text.textContent = 'Syncing...';
+        spinner.style.display = 'inline-block';
+        startPolling();
+    });
 });
 </script>
 {% endblock %}
