@@ -107,6 +107,8 @@ def _migrate(db):
         if col_name not in existing_cols:
             db.execute(f"ALTER TABLE activities ADD COLUMN {col_name} {col_type}")
 
+    # Create indexes for new columns (safe to run after columns exist)
+    db.execute("CREATE INDEX IF NOT EXISTS idx_activities_person ON activities(person)")
     db.commit()
 
 
@@ -156,7 +158,6 @@ CREATE TABLE IF NOT EXISTS people (
     name TEXT NOT NULL UNIQUE
 );
 
-CREATE INDEX IF NOT EXISTS idx_activities_person ON activities(person);
 """
 
 DEFAULT_EXERCISE_TYPES = [
