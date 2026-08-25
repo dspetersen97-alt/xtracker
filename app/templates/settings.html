@@ -25,6 +25,69 @@
     <a href="{{ url_for('settings.import_page') }}" role="button" class="outline">Import CSV</a>
 </article>
 
+<!-- Garmin Connect -->
+<article>
+    <header><h2>Garmin Connect</h2></header>
+    {% if garmin_connected %}
+    <p>Connected as <strong>{{ garmin_email }}</strong>
+        {% if garmin_last_sync %}
+        <br><small>Last sync: {{ garmin_last_sync.strftime("%Y-%m-%d %H:%M") }}</small>
+        {% endif %}
+    </p>
+
+    <!-- Sync Now -->
+    <form method="POST" action="{{ url_for('settings.garmin_sync') }}" style="margin-bottom: 1rem;">
+        <div class="grid">
+            <div>
+                <label for="sync-person">Sync for person</label>
+                <select id="sync-person" name="person">
+                    <option value="">-- No person --</option>
+                    {% for p in people %}
+                    <option value="{{ p.name }}">{{ p.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="sync-days">Days back</label>
+                <select id="sync-days" name="days_back">
+                    <option value="7">7 days</option>
+                    <option value="30" selected>30 days</option>
+                    <option value="90">90 days</option>
+                    <option value="365">1 year</option>
+                </select>
+            </div>
+        </div>
+        <button type="submit">Sync Now</button>
+    </form>
+
+    <!-- Test / Disconnect -->
+    <div style="display: flex; gap: 0.5rem;">
+        <form method="POST" action="{{ url_for('settings.garmin_test') }}" style="margin: 0;">
+            <button type="submit" class="outline">Test Connection</button>
+        </form>
+        <form method="POST" action="{{ url_for('settings.garmin_disconnect') }}"
+              onsubmit="return confirm('Disconnect Garmin and remove credentials?');" style="margin: 0;">
+            <button type="submit" class="secondary outline">Disconnect</button>
+        </form>
+    </div>
+
+    {% else %}
+    <p>Link your Garmin Connect account to automatically sync activities.</p>
+    <form method="POST" action="{{ url_for('settings.garmin_connect') }}">
+        <label for="garmin_email">Garmin Email</label>
+        <input type="email" id="garmin_email" name="garmin_email" required
+               placeholder="your@email.com" autocomplete="email">
+
+        <label for="garmin_password">Garmin Password</label>
+        <input type="password" id="garmin_password" name="garmin_password" required
+               placeholder="Your Garmin password" autocomplete="current-password">
+
+        <small>Your credentials are encrypted before storage and never logged or displayed.</small>
+        <button type="submit" style="margin-top: 0.5rem;">Connect</button>
+    </form>
+    {% endif %}
+</article>
+
 <!-- People -->
 <article>
     <header><h2>People</h2></header>

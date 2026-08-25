@@ -2,6 +2,14 @@ import json
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 
+from ..garmin_sync import (
+    clear_garmin_credentials,
+    get_garmin_credentials,
+    get_last_sync_time,
+    save_garmin_credentials,
+    sync_activities,
+    test_connection as garmin_test_connection,
+)
 from ..importer import import_garmin_csv
 from ..models import (
     create_exercise_type,
@@ -42,7 +50,21 @@ def exercise_types():
     types = get_exercise_types()
     units = get_units()
     people = get_people()
-    return render_template("settings.html", exercise_types=types, units=units, people=people)
+
+    # Garmin status
+    garmin_email, _ = get_garmin_credentials()
+    garmin_connected = garmin_email is not None
+    garmin_last_sync = get_last_sync_time()
+
+    return render_template(
+        "settings.html",
+        exercise_types=types,
+        units=units,
+        people=people,
+        garmin_connected=garmin_connected,
+        garmin_email=garmin_email,
+        garmin_last_sync=garmin_last_sync,
+    )
 
 
 @settings_bp.route("/settings/types/new")
@@ -234,4 +256,79 @@ def remove_person(person_id):
         flash("Person removed.", "success")
     else:
         flash("Person not found.", "error")
+    return redirect(url_for("settings.exercise_types"))
+
+
+
+# --- Garmin Connect ---
+
+
+@settings_bp.route("/settings/garmin/connect", methods=["POST"])
+def garmin_connect():
+    """Save Garmin credentials and test the connection."""
+    email = request.form.get("garmin_email", "").strip()
+    password = request.form.get("garmin_password", "").strip()
+
+    if not email or not password:
+        flash("Email and password are required.", "error")
+        return redirect(url_for("settings.exercise_types"))
+
+    # Save credentials (encrypted)
+    save_garmin_credentials(email, password)
+
+    # Test the connection
+    success, message = garmin_test_connection()
+    if success:
+        flash(f"Garmin Connect linked successfully ({email}).", "success")
+    else:
+        # Remove credentials if connection failed
+        clear_garmin_credentials()
+        flash(f"Connection failed: {message}", "error")
+
+    return redirect(url_for("settings.exercise_types"))
+
+
+@settings_bp.route("/settings/garmin/disconnect", methods=["POST"])
+def garmin_disconnect():
+    """Remove stored Garmin credentials."""
+    clear_garmin_credentials()
+    flash("Garmin Connect disconnected.", "success")
+    return redirect(url_for("settings.exercise_types"))
+
+
+@settings_bp.route("/settings/garmin/test", methods=["POST"])
+def garmin_test():
+    """Test the Garmin connection."""
+    success, message = garmin_test_connection()
+    if success:
+        flash("Garmin connection is working.", "success")
+    else:
+        flash(f"Connection test failed: {message}", "error")
+    return redirect(url_for("settings.exercise_types"))
+
+
+@settings_bp.route("/settings/garmin/sync", methods=["POST"])
+def garmin_sync():
+    """Sync activities from Garmin Connect."""
+    person = request.form.get("person", "").strip() or None
+    days_back = request.form.get("days_back", "30").strip()
+
+    try:
+        days = int(days_back)
+    except ValueError:
+        days = 30
+
+    result = sync_activities(person_name=person, days_back=days)
+
+    if result["imported"] > 0:
+        flash(f"Synced {result['imported']} new activities from Garmin.", "success")
+    elif not result["errors"]:
+        flash("No new activities to sync.", "success")
+
+    if result["skipped"] > 0 and result["imported"] == 0 and not result["errors"]:
+        flash(f"{result['skipped']} activities already imported (skipped).", "success")
+
+    for err in result["errors"][:5]:
+        flash(err, "error")
+
     return redirect(url_for("settings.exercise_types"))
