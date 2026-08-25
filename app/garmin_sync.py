@@ -14,7 +14,6 @@ from datetime import date, datetime, timedelta
 from .crypto import decrypt, encrypt
 from .database import get_db
 from .models import get_person_by_name, get_setting, set_setting
-from .weather import get_historical_weather
 
 logger = logging.getLogger(__name__)
 
@@ -208,18 +207,9 @@ def sync_activities(person_name=None, days_back=30):
             skipped += 1
 
     db.commit()
-
-    # Backfill weather for activities with GPS but no weather data
-    weather_filled = _backfill_weather(db)
-    if weather_filled > 0:
-        db.commit()
-
     set_last_sync_time()
 
-    result = {"imported": imported, "skipped": skipped, "errors": errors}
-    if weather_filled > 0:
-        result["weather_filled"] = weather_filled
-    return result
+    return {"imported": imported, "skipped": skipped, "errors": errors}
 
 
 def _get_existing_garmin_ids(db):
@@ -341,19 +331,20 @@ def _import_garmin_activity(db, activity, person_name, person_profile, garmin_id
 
 
 
-def _backfill_weather(db):
-    """Backfill weather data for activities that have GPS coords but no weather.
-    Only processes run/walk/hike activities. Returns count of activities updated.
+def _backfill_weather(db, garmin):
+    """Backfill weather data for activities using Garmin's activity weather API.
+    Only processes run/walk/hike activities that have a garmin_id but no weather.
+    Returns count of activities updated.
     """
+    import json as json_mod
     import time
 
     rows = db.execute(
-        """SELECT id, activity_date, start_latitude, start_longitude
+        """SELECT id, details
          FROM activities
-         WHERE start_latitude IS NOT NULL
-           AND start_longitude IS NOT NULL
-           AND weather_temp_c IS NULL
+         WHERE weather_temp_c IS NULL
            AND activity_type IN ('run', 'walk', 'hike')
+           AND details LIKE '%garmin_id%'
          ORDER BY activity_date DESC
          LIMIT 50"""
     ).fetchall()
@@ -362,21 +353,36 @@ def _backfill_weather(db):
         return 0
 
     filled = 0
-    for row in rows:
+    total = len(rows)
+    for i, row in enumerate(rows, 1):
         try:
-            weather = get_historical_weather(
-                row["start_latitude"],
-                row["start_longitude"],
-                row["activity_date"],
-            )
+            details = json_mod.loads(row["details"] or "{}")
+            garmin_id = details.get("garmin_id")
+            if not garmin_id:
+                continue
+
+            _set_sync_status(f"Fetching weather data... ({i}/{total})")
+            weather = garmin.get_activity_weather(str(garmin_id))
+
             if weather:
-                db.execute(
-                    "UPDATE activities SET weather_temp_c = ?, weather_humidity = ? WHERE id = ?",
-                    (weather["temperature_c"], weather["humidity"], row["id"]),
-                )
-                filled += 1
-                # Rate limit: Open-Meteo allows 10k/day but be polite
-                time.sleep(0.2)
+                temp_c = weather.get("temp")
+                humidity = weather.get("relativeHumidity")
+
+                # Some responses nest differently
+                if temp_c is None:
+                    temp_c = weather.get("temperature")
+                if humidity is None:
+                    humidity = weather.get("humidity")
+
+                if temp_c is not None:
+                    db.execute(
+                        "UPDATE activities SET weather_temp_c = ?, weather_humidity = ? WHERE id = ?",
+                        (float(temp_c), float(humidity) if humidity else None, row["id"]),
+                    )
+                    filled += 1
+
+            # Be polite with rate limiting
+            time.sleep(0.3)
         except Exception as e:
             logger.warning(f"Weather backfill failed for activity {row['id']}: {e}")
             continue
@@ -386,10 +392,23 @@ def _backfill_weather(db):
 
 def backfill_all_weather():
     """Manually trigger weather backfill for all eligible activities.
-    Called from a route. Returns count of activities updated.
+    Requires Garmin connection. Called from a route.
+    Returns count of activities updated.
     """
+    email, password = get_garmin_credentials()
+    if not email or not password:
+        return 0
+
+    try:
+        from garminconnect import Garmin
+        token_dir = _get_token_dir()
+        garmin = Garmin(email=email, password=password)
+        garmin.login(token_dir)
+    except Exception:
+        return 0
+
     db = get_db()
-    filled = _backfill_weather(db)
+    filled = _backfill_weather(db, garmin)
     if filled > 0:
         db.commit()
     return filled
@@ -585,10 +604,7 @@ def sync_all(person_name=None, days_back=30):
     _set_sync_status("Fetching activities from Garmin...")
     act_result = sync_activities(person_name=person_name, days_back=days_back)
     if act_result["imported"] > 0:
-        msg = f"Synced {act_result['imported']} new activities."
-        if act_result.get("weather_filled"):
-            msg += f" Weather added for {act_result['weather_filled']}."
-        results["messages"].append(msg)
+        results["messages"].append(f"Synced {act_result['imported']} new activities.")
     if act_result["errors"]:
         results["errors"].extend(act_result["errors"][:3])
 
@@ -602,12 +618,12 @@ def sync_all(person_name=None, days_back=30):
         if health_result["errors"]:
             results["errors"].extend(health_result["errors"][:3])
 
-    # Step 4: Backfill weather
+    # Step 4: Backfill weather using Garmin's activity weather API
     _set_sync_status("Fetching weather data for activities...")
-    weather_filled = _backfill_weather(get_db())
+    weather_filled = _backfill_weather(get_db(), garmin)
     if weather_filled > 0:
         get_db().commit()
-        results["messages"].append(f"Weather backfilled for {weather_filled} activities.")
+        results["messages"].append(f"Weather data added for {weather_filled} activities.")
 
     # Done
     set_last_sync_time()
