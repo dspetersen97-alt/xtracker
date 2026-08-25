@@ -170,15 +170,25 @@ def add_person():
         flash("Name is required.", "error")
         return redirect(url_for("settings.exercise_types"))
 
-    weight_kg = request.form.get("weight_kg", "").strip()
-    height_cm = request.form.get("height_cm", "").strip()
+    weight_raw = request.form.get("weight", "").strip()
+    height_raw = request.form.get("height", "").strip()
     sex = request.form.get("sex", "").strip()
     birth_year = request.form.get("birth_year", "").strip()
 
+    units = get_units()
+    weight_kg = None
+    height_cm = None
+    if weight_raw:
+        w = float(weight_raw)
+        weight_kg = w / 2.20462 if units == "imperial" else w
+    if height_raw:
+        h = float(height_raw)
+        height_cm = h * 2.54 if units == "imperial" else h
+
     create_person(
         name=name,
-        weight_kg=float(weight_kg) if weight_kg else None,
-        height_cm=float(height_cm) if height_cm else None,
+        weight_kg=round(weight_kg, 1) if weight_kg else None,
+        height_cm=round(height_cm, 1) if height_cm else None,
         sex=sex if sex in ("male", "female") else None,
         birth_year=int(birth_year) if birth_year else None,
     )
@@ -190,16 +200,26 @@ def add_person():
 def edit_person(person_id):
     """Update a person's profile."""
     name = request.form.get("name", "").strip()
-    weight_kg = request.form.get("weight_kg", "").strip()
-    height_cm = request.form.get("height_cm", "").strip()
+    weight_raw = request.form.get("weight", "").strip()
+    height_raw = request.form.get("height", "").strip()
     sex = request.form.get("sex", "").strip()
     birth_year = request.form.get("birth_year", "").strip()
+
+    units = get_units()
+    weight_kg = None
+    height_cm = None
+    if weight_raw:
+        w = float(weight_raw)
+        weight_kg = round(w / 2.20462, 1) if units == "imperial" else w
+    if height_raw:
+        h = float(height_raw)
+        height_cm = round(h * 2.54, 1) if units == "imperial" else h
 
     update_person(
         person_id,
         name=name if name else None,
-        weight_kg=float(weight_kg) if weight_kg else None,
-        height_cm=float(height_cm) if height_cm else None,
+        weight_kg=weight_kg,
+        height_cm=height_cm,
         sex=sex if sex in ("male", "female") else None,
         birth_year=int(birth_year) if birth_year else None,
     )

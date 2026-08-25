@@ -32,7 +32,7 @@
     {% for p in people %}
     <details>
         <summary><strong>{{ p.name }}</strong>
-            {% if p.weight_kg %} &middot; {{ p.weight_kg }}kg{% endif %}
+            {% if p.weight_kg %} &middot; {% if units == 'imperial' %}{{ (p.weight_kg * 2.20462) | round(1) }}lbs{% else %}{{ p.weight_kg }}kg{% endif %}{% endif %}
             {% if p.sex %} &middot; {{ p.sex | capitalize }}{% endif %}
         </summary>
         <form method="POST" action="{{ url_for('settings.edit_person', person_id=p.id) }}">
@@ -52,12 +52,12 @@
             </div>
             <div class="grid">
                 <div>
-                    <label>Weight (kg)</label>
-                    <input type="number" name="weight_kg" step="0.1" min="0" value="{{ p.weight_kg or '' }}">
+                    <label>Weight ({% if units == 'imperial' %}lbs{% else %}kg{% endif %})</label>
+                    <input type="number" name="weight" step="0.1" min="0" value="{% if p.weight_kg %}{% if units == 'imperial' %}{{ (p.weight_kg * 2.20462) | round(1) }}{% else %}{{ p.weight_kg }}{% endif %}{% endif %}">
                 </div>
                 <div>
-                    <label>Height (cm)</label>
-                    <input type="number" name="height_cm" step="0.1" min="0" value="{{ p.height_cm or '' }}">
+                    <label>Height ({% if units == 'imperial' %}in{% else %}cm{% endif %})</label>
+                    <input type="number" name="height" step="0.1" min="0" value="{% if p.height_cm %}{% if units == 'imperial' %}{{ (p.height_cm / 2.54) | round(1) }}{% else %}{{ p.height_cm }}{% endif %}{% endif %}">
                 </div>
                 <div>
                     <label>Birth Year</label>
@@ -96,12 +96,12 @@
         </div>
         <div class="grid">
             <div>
-                <label>Weight (kg)</label>
-                <input type="number" name="weight_kg" step="0.1" min="0" placeholder="e.g. 75">
+                <label>Weight ({% if units == 'imperial' %}lbs{% else %}kg{% endif %})</label>
+                <input type="number" name="weight" step="0.1" min="0" placeholder="{% if units == 'imperial' %}e.g. 165{% else %}e.g. 75{% endif %}">
             </div>
             <div>
-                <label>Height (cm)</label>
-                <input type="number" name="height_cm" step="0.1" min="0" placeholder="e.g. 178">
+                <label>Height ({% if units == 'imperial' %}in{% else %}cm{% endif %})</label>
+                <input type="number" name="height" step="0.1" min="0" placeholder="{% if units == 'imperial' %}e.g. 70{% else %}e.g. 178{% endif %}">
             </div>
             <div>
                 <label>Birth Year</label>
