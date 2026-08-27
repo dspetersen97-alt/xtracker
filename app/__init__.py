@@ -28,11 +28,15 @@ def create_app(config_overrides=None):
     from .routes.progress import progress_bp
     from .routes.settings import settings_bp
     from .routes.health import health_bp
+    from .routes.auth import auth_bp
+    from .routes.profile import profile_bp
     app.register_blueprint(main_bp)
     app.register_blueprint(activities_bp)
     app.register_blueprint(progress_bp)
     app.register_blueprint(settings_bp)
     app.register_blueprint(health_bp)
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(profile_bp)
 
     # Error handlers
     @app.errorhandler(404)

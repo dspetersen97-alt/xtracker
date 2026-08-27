@@ -149,12 +149,85 @@ def calculate_weather_multiplier(temp_c, humidity):
     return round(multiplier, 3)
 
 
+def calculate_cardio_score(duration_minutes, distance_km=None, calories=None,
+                          weight_kg=None, sex=None, avg_hr=None, age=None):
+    """Calculate a score for cardio activities (cycling, elliptical, etc).
+    
+    Based on duration and intensity. Distance contributes if available.
+    
+    Returns float score, or None if insufficient data.
+    """
+    if not duration_minutes or duration_minutes <= 0:
+        return None
+    
+    if weight_kg is None:
+        weight_kg = 70.0
+    if sex is None:
+        sex = "male"
+    
+    # Base: 3 points per minute of cardio
+    base_score = duration_minutes * 3
+    
+    # Distance bonus if available (e.g. cycling)
+    if distance_km and distance_km > 0:
+        base_score += distance_km * 2
+    
+    # HR intensity factor
+    if avg_hr and avg_hr > 0:
+        max_hr = estimate_max_hr(age, sex)
+        hr_intensity = avg_hr / max_hr
+        hr_intensity = max(0.5, min(1.2, hr_intensity))
+        hr_factor = 0.5 + hr_intensity
+    else:
+        hr_factor = 1.2
+    
+    # Weight factor
+    weight_factor = weight_kg / 70.0
+    
+    return round(base_score * hr_factor * weight_factor, 1)
+
+
+def calculate_strength_score(duration_minutes, calories=None,
+                             weight_kg=None, sex=None, avg_hr=None, age=None):
+    """Calculate a score for strength training activities.
+    
+    Based on duration and intensity. Strength sessions are typically shorter
+    but intense, so we use a higher per-minute base.
+    
+    Returns float score, or None if insufficient data.
+    """
+    if not duration_minutes or duration_minutes <= 0:
+        return None
+    
+    if weight_kg is None:
+        weight_kg = 70.0
+    if sex is None:
+        sex = "male"
+    
+    # Base: 4 points per minute (strength is intense per minute)
+    base_score = duration_minutes * 4
+    
+    # HR intensity factor (lower HR typical for strength, but still rewards effort)
+    if avg_hr and avg_hr > 0:
+        max_hr = estimate_max_hr(age, sex)
+        hr_intensity = avg_hr / max_hr
+        hr_intensity = max(0.4, min(1.1, hr_intensity))
+        hr_factor = 0.5 + hr_intensity
+    else:
+        hr_factor = 1.1  # moderate default for strength
+    
+    # Weight factor (heavier people lift relative to bodyweight)
+    weight_factor = weight_kg / 70.0
+    
+    return round(base_score * hr_factor * weight_factor, 1)
+
+
 def score_activity(activity, person_profile):
     """Score an activity using the person's profile.
     
     Args:
         activity: dict with activity fields (distance_km, total_ascent_m, 
-                  duration_minutes, avg_hr, weather_temp_c, weather_humidity)
+                  duration_minutes, avg_hr, weather_temp_c, weather_humidity, calories)
         person_profile: dict with person fields (weight_kg, sex, birth_year)
     
     Returns:
@@ -162,10 +235,6 @@ def score_activity(activity, person_profile):
         or None if activity type is not scoreable
     """
     activity_type = activity.get("activity_type", "")
-    
-    # Only score running, walking, hiking
-    if activity_type not in ("run", "walk", "hike"):
-        return None
     
     # Get person's age
     age = None
@@ -175,25 +244,49 @@ def score_activity(activity, person_profile):
     weight_kg = person_profile.get("weight_kg") if person_profile else None
     sex = person_profile.get("sex") if person_profile else None
     
-    # Calculate base score
-    raw_score = calculate_score(
-        distance_km=activity.get("distance_km"),
-        total_ascent_m=activity.get("total_ascent_m"),
-        duration_minutes=activity.get("duration_minutes"),
-        weight_kg=weight_kg,
-        sex=sex,
-        avg_hr=activity.get("avg_hr"),
-        age=age,
-    )
+    # Calculate base score based on activity type
+    raw_score = None
+    
+    if activity_type in ("run", "walk", "hike"):
+        raw_score = calculate_score(
+            distance_km=activity.get("distance_km"),
+            total_ascent_m=activity.get("total_ascent_m"),
+            duration_minutes=activity.get("duration_minutes"),
+            weight_kg=weight_kg,
+            sex=sex,
+            avg_hr=activity.get("avg_hr"),
+            age=age,
+        )
+    elif activity_type == "cardio":
+        raw_score = calculate_cardio_score(
+            duration_minutes=activity.get("duration_minutes"),
+            distance_km=activity.get("distance_km"),
+            calories=activity.get("calories"),
+            weight_kg=weight_kg,
+            sex=sex,
+            avg_hr=activity.get("avg_hr"),
+            age=age,
+        )
+    elif activity_type == "strength":
+        raw_score = calculate_strength_score(
+            duration_minutes=activity.get("duration_minutes"),
+            calories=activity.get("calories"),
+            weight_kg=weight_kg,
+            sex=sex,
+            avg_hr=activity.get("avg_hr"),
+            age=age,
+        )
     
     if raw_score is None:
         return None
     
-    # Calculate weather multiplier
-    weather_mult = calculate_weather_multiplier(
-        temp_c=activity.get("weather_temp_c"),
-        humidity=activity.get("weather_humidity"),
-    )
+    # Calculate weather multiplier (only for outdoor activities)
+    weather_mult = 1.0
+    if activity_type in ("run", "walk", "hike"):
+        weather_mult = calculate_weather_multiplier(
+            temp_c=activity.get("weather_temp_c"),
+            humidity=activity.get("weather_humidity"),
+        )
     
     final_score = round(raw_score * weather_mult, 1)
     

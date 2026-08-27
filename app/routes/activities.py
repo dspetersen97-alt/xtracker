@@ -21,12 +21,9 @@ from ..units import convert_activity_for_display
 
 def _compute_score(activity):
     """Compute score dynamically from the activity's stored snapshot fields.
-    Modifies activity dict in place to add 'computed_score' and 'weather_multiplier_computed'.
+    Modifies activity dict in place to add 'computed_score', 'weather_multiplier_computed', 'skill_name'.
     """
-    if activity.get("activity_type") not in ("run", "walk", "hike"):
-        activity["computed_score"] = None
-        activity["weather_multiplier_computed"] = None
-        return activity
+    from ..leveling import ACTIVITY_TYPE_TO_SKILL
 
     # Build a person profile from the snapshot stored on the activity
     person_profile = {
@@ -42,6 +39,31 @@ def _compute_score(activity):
     else:
         activity["computed_score"] = None
         activity["weather_multiplier_computed"] = None
+
+    # Add skill category name and levels
+    activity["skill_name"] = ACTIVITY_TYPE_TO_SKILL.get(activity.get("activity_type"), "")
+
+    # Compute skill level and total fitness level if person is set
+    activity["skill_level"] = None
+    activity["total_fitness_level"] = None
+    if activity.get("person"):
+        try:
+            from ..leveling import get_profile_data
+            from ..database import get_db
+            db = get_db()
+            profile = get_profile_data(activity["person"], db)
+            if profile:
+                skill = activity["skill_name"]
+                if skill and skill in profile:
+                    activity["skill_level"] = profile[skill]["level"]
+                activity["total_fitness_level"] = (
+                    profile["outdoor"]["level"] +
+                    profile["cardio"]["level"] +
+                    profile["strength"]["level"]
+                )
+        except Exception:
+            pass
+
     return activity
 
 activities_bp = Blueprint("activities", __name__)

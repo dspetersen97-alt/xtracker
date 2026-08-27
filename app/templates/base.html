@@ -3,46 +3,89 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}xtracker{% endblock %}</title>
+    <title>{% block title %}xTracker{% endblock %}</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/favicon.png') }}">
     {% block head %}{% endblock %}
 </head>
 <body>
-    <header class="container">
-        <nav>
-            <ul>
-                <li><a href="{{ url_for('main.index') }}"><strong>xtracker</strong></a></li>
-            </ul>
+    {% block header %}
+    <!-- Mobile top bar -->
+    <div class="mobile-topbar">
+        <div class="hamburger" id="hamburger-btn" role="button" tabindex="0" aria-label="Toggle navigation" aria-expanded="false">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+        <a href="{{ url_for('main.index') }}">
+            <img src="{{ url_for('static', filename='images/xTracker Text.png') }}" alt="xTracker" class="topbar-logo">
+        </a>
+    </div>
+
+    <!-- Sidebar navigation -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-logo">
+            <a href="{{ url_for('main.index') }}">
+                <img src="{{ url_for('static', filename='images/xTracker Text.png') }}" alt="xTracker">
+            </a>
+        </div>
+        <nav class="sidebar-nav">
             <ul>
                 <li><a href="{{ url_for('main.index') }}">Home</a></li>
                 <li><a href="{{ url_for('activities.log_workout') }}">Log</a></li>
                 <li><a href="{{ url_for('activities.history') }}">History</a></li>
                 <li><a href="{{ url_for('progress.dashboard') }}">Progress</a></li>
                 <li><a href="{{ url_for('health.dashboard') }}">Health</a></li>
+                <li><a href="{{ url_for('profile.profile') }}">Profile</a></li>
                 <li><a href="{{ url_for('settings.exercise_types') }}">Settings</a></li>
             </ul>
         </nav>
-    </header>
+    </aside>
+    {% endblock %}
 
-    <main class="container">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <article aria-label="Notification" role="alert" {% if category == 'error' %}data-theme="invalid"{% endif %}>
-                        {{ message }}
-                    </article>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
+    <main class="main-content">
+        <div class="content-inner">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <article aria-label="Notification" role="alert" {% if category == 'error' %}data-theme="invalid"{% endif %}>
+                            {{ message }}
+                        </article>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
 
-        {% block content %}{% endblock %}
+            {% block content %}{% endblock %}
+        </div>
     </main>
 
-    <footer class="container">
-        <small>xtracker — Exercise Tracker</small>
-    </footer>
+    {% block footer %}<footer class="site-footer">
+        <small><img src="{{ url_for('static', filename='images/favicon.png') }}" alt="" style="height: 16px; width: auto; vertical-align: middle; margin-right: 0.3rem;">xTracker — Exercise Tracker &middot; <a href="{{ url_for('auth.change_password') }}">Change Password</a></small>
+    </footer>{% endblock %}
 
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var btn = document.getElementById('hamburger-btn');
+        var sidebar = document.getElementById('sidebar');
+        if (btn && sidebar) {
+            btn.addEventListener('click', function() {
+                sidebar.classList.toggle('open');
+                btn.classList.toggle('open');
+                var expanded = btn.getAttribute('aria-expanded') === 'true';
+                btn.setAttribute('aria-expanded', !expanded);
+            });
+            // Close sidebar when a link is clicked (mobile)
+            sidebar.querySelectorAll('a').forEach(function(link) {
+                link.addEventListener('click', function() {
+                    sidebar.classList.remove('open');
+                    btn.classList.remove('open');
+                    btn.setAttribute('aria-expanded', 'false');
+                });
+            });
+        }
+    });
+    </script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

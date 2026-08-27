@@ -54,21 +54,11 @@ def exercise_types():
     """List all exercise types and app settings."""
     types = get_exercise_types()
     units = get_units()
-    people = get_people()
-
-    # Garmin status
-    garmin_email, _ = get_garmin_credentials()
-    garmin_connected = garmin_email is not None
-    garmin_last_sync = get_last_sync_time()
 
     return render_template(
         "settings.html",
         exercise_types=types,
         units=units,
-        people=people,
-        garmin_connected=garmin_connected,
-        garmin_email=garmin_email,
-        garmin_last_sync=garmin_last_sync,
     )
 
 
@@ -143,7 +133,7 @@ def toggle_units():
         flash(f"Units switched to {units}.", "success")
     else:
         flash("Invalid unit selection.", "error")
-    return redirect(url_for("settings.exercise_types"))
+    return redirect(url_for("profile.profile"))
 
 
 @settings_bp.route("/settings/import", methods=["GET"])
@@ -195,7 +185,7 @@ def add_person():
     name = request.form.get("name", "").strip()
     if not name:
         flash("Name is required.", "error")
-        return redirect(url_for("settings.exercise_types"))
+        return redirect(url_for("profile.profile"))
 
     weight_raw = request.form.get("weight", "").strip()
     height_raw = request.form.get("height", "").strip()
@@ -220,7 +210,7 @@ def add_person():
         birth_year=int(birth_year) if birth_year else None,
     )
     flash(f"Person '{name}' added.", "success")
-    return redirect(url_for("settings.exercise_types"))
+    return redirect(url_for("profile.profile"))
 
 
 @settings_bp.route("/settings/people/<int:person_id>/edit", methods=["POST"])
@@ -251,7 +241,7 @@ def edit_person(person_id):
         birth_year=int(birth_year) if birth_year else None,
     )
     flash("Profile updated.", "success")
-    return redirect(url_for("settings.exercise_types"))
+    return redirect(url_for("profile.profile"))
 
 
 @settings_bp.route("/settings/people/<int:person_id>/delete", methods=["POST"])
@@ -261,7 +251,7 @@ def remove_person(person_id):
         flash("Person removed.", "success")
     else:
         flash("Person not found.", "error")
-    return redirect(url_for("settings.exercise_types"))
+    return redirect(url_for("profile.profile"))
 
 
 
@@ -276,7 +266,7 @@ def garmin_connect():
 
     if not email or not password:
         flash("Email and password are required.", "error")
-        return redirect(url_for("settings.exercise_types"))
+        return redirect(url_for("profile.profile"))
 
     # Save credentials (encrypted)
     save_garmin_credentials(email, password)
@@ -290,7 +280,7 @@ def garmin_connect():
         clear_garmin_credentials()
         flash(f"Connection failed: {message}", "error")
 
-    return redirect(url_for("settings.exercise_types"))
+    return redirect(url_for("profile.profile"))
 
 
 @settings_bp.route("/settings/garmin/disconnect", methods=["POST"])
@@ -298,7 +288,7 @@ def garmin_disconnect():
     """Remove stored Garmin credentials."""
     clear_garmin_credentials()
     flash("Garmin Connect disconnected.", "success")
-    return redirect(url_for("settings.exercise_types"))
+    return redirect(url_for("profile.profile"))
 
 
 @settings_bp.route("/settings/garmin/test", methods=["POST"])
@@ -309,7 +299,7 @@ def garmin_test():
         flash("Garmin connection is working.", "success")
     else:
         flash(f"Connection test failed: {message}", "error")
-    return redirect(url_for("settings.exercise_types"))
+    return redirect(url_for("profile.profile"))
 
 
 @settings_bp.route("/settings/garmin/sync", methods=["POST"])
@@ -351,7 +341,7 @@ def garmin_sync_health():
 
     if not person:
         flash("Please select a person for health sync.", "error")
-        return redirect(url_for("settings.exercise_types"))
+        return redirect(url_for("profile.profile"))
 
     try:
         days = int(days_back)
@@ -407,7 +397,7 @@ def garmin_sync_all():
         flash(err, "error")
 
     clear_sync_status()
-    return redirect(url_for("settings.exercise_types"))
+    return redirect(url_for("profile.profile"))
 
 
 @settings_bp.route("/settings/garmin/sync-status")

@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 
-{% block title %}xtracker — Home{% endblock %}
+{% block title %}xTracker — Home{% endblock %}
 
 {% block content %}
-<hgroup>
-    <h1>xtracker</h1>
+<div style="text-align: center; margin-bottom: 2rem;">
+    <img src="{{ url_for('static', filename='images/xTracker Text.png') }}" alt="xTracker" style="height: 65px; width: auto;">
     <p>Your personal exercise tracker</p>
-</hgroup>
+</div>
 
 <!-- Quick Stats -->
 <div class="grid">
