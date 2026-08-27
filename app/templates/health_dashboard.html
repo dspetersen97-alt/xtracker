@@ -50,24 +50,12 @@
         </p>
     </article>
     <article>
-        <header><small>Resting HR</small></header>
-        <p style="font-size: 1.8rem; margin: 0; font-weight: 700;">
-            {{ latest.resting_hr or '--' }} <small>bpm</small>
-        </p>
-    </article>
-    <article>
         <header><small>Weight</small></header>
         <p style="font-size: 1.8rem; margin: 0; font-weight: 700;">
             {% if latest.weight_kg %}
                 {% if units == 'imperial' %}{{ (latest.weight_kg * 2.20462) | round(1) }} <small>lbs</small>
                 {% else %}{{ latest.weight_kg | round(1) }} <small>kg</small>{% endif %}
             {% else %}--{% endif %}
-        </p>
-    </article>
-    <article>
-        <header><small>VO2 Max</small></header>
-        <p style="font-size: 1.8rem; margin: 0; font-weight: 700;">
-            {{ latest.vo2_max or '--' }}
         </p>
     </article>
 </div>
@@ -80,43 +68,11 @@
     </div>
 </article>
 
-<!-- Resting Heart Rate Chart -->
-<article>
-    <header><h3>Resting Heart Rate</h3></header>
-    <div class="chart-container">
-        <canvas id="hrChart"></canvas>
-    </div>
-</article>
-
 <!-- Weight Chart -->
 <article>
     <header><h3>Weight</h3></header>
     <div class="chart-container">
         <canvas id="weightChart"></canvas>
-    </div>
-</article>
-
-<!-- VO2 Max Chart -->
-<article>
-    <header><h3>VO2 Max</h3></header>
-    <div class="chart-container">
-        <canvas id="vo2Chart"></canvas>
-    </div>
-</article>
-
-<!-- Calories Chart -->
-<article>
-    <header><h3>Calories</h3></header>
-    <div class="chart-container">
-        <canvas id="caloriesChart"></canvas>
-    </div>
-</article>
-
-<!-- Stress Chart -->
-<article>
-    <header><h3>Stress Levels</h3></header>
-    <div class="chart-container">
-        <canvas id="stressChart"></canvas>
     </div>
 </article>
 
@@ -158,22 +114,6 @@ document.addEventListener('DOMContentLoaded', function() {
         options: lineOptsZero
     });
 
-    // Resting HR (line)
-    new Chart(document.getElementById('hrChart'), {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: 'Resting HR (bpm)',
-                data: {{ chart_data.resting_hr | tojson }},
-                borderColor: 'rgba(255, 99, 132, 1)',
-                backgroundColor: 'rgba(255, 99, 132, 0.1)',
-                fill: true
-            }]
-        },
-        options: lineOpts
-    });
-
     // Weight (line)
     const weightData = {{ chart_data.weight | tojson }};
     {% if units == 'imperial' %}
@@ -196,78 +136,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }]
         },
         options: lineOpts
-    });
-
-    // VO2 Max (line)
-    new Chart(document.getElementById('vo2Chart'), {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: 'VO2 Max',
-                data: {{ chart_data.vo2_max | tojson }},
-                borderColor: 'rgba(153, 102, 255, 1)',
-                backgroundColor: 'rgba(153, 102, 255, 0.1)',
-                fill: true
-            }]
-        },
-        options: lineOpts
-    });
-
-    // Calories (stacked bar)
-    new Chart(document.getElementById('caloriesChart'), {
-        type: 'bar',
-        data: {
-            labels: labels,
-            datasets: [
-                {
-                    label: 'Active Calories',
-                    data: {{ chart_data.calories_active | tojson }},
-                    backgroundColor: 'rgba(255, 159, 64, 0.8)',
-                },
-                {
-                    label: 'Total Calories',
-                    data: {{ chart_data.calories_total | tojson }},
-                    backgroundColor: 'rgba(255, 206, 86, 0.4)',
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            plugins: { legend: { display: true, position: 'bottom' } },
-            scales: { y: { beginAtZero: true } }
-        }
-    });
-
-    // Stress (line with avg and max)
-    new Chart(document.getElementById('stressChart'), {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [
-                {
-                    label: 'Avg Stress',
-                    data: {{ chart_data.stress_avg | tojson }},
-                    borderColor: 'rgba(255, 159, 64, 1)',
-                    backgroundColor: 'rgba(255, 159, 64, 0.1)',
-                    fill: true
-                },
-                {
-                    label: 'Max Stress',
-                    data: {{ chart_data.stress_max | tojson }},
-                    borderColor: 'rgba(255, 99, 132, 0.6)',
-                    borderDash: [5, 5],
-                    fill: false
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            spanGaps: true,
-            plugins: { legend: { display: true, position: 'bottom' } },
-            scales: { y: { beginAtZero: true, max: 100 } },
-            elements: { point: { radius: 2 }, line: { tension: 0.3 } }
-        }
     });
 });
 </script>

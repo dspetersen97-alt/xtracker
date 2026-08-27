@@ -17,6 +17,20 @@ def create_app(config_overrides=None):
 
     app.secret_key = app.config["SECRET_KEY"]
 
+    # Exercise-type names are stored lowercase. Most display like a normal
+    # capitalized word, but some are acronyms that should stay all-caps.
+    EXERCISE_NAME_ACRONYMS = {"hiit": "HIIT"}
+
+    @app.template_filter("exercise_name")
+    def exercise_name_filter(name):
+        """Format an exercise-type name for display, preserving acronyms."""
+        if not name:
+            return name
+        key = str(name).strip().lower()
+        if key in EXERCISE_NAME_ACRONYMS:
+            return EXERCISE_NAME_ACRONYMS[key]
+        return str(name).capitalize()
+
     # Initialize database (handles data dir creation and validation)
     from .database import init_db
     with app.app_context():

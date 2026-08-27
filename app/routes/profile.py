@@ -3,7 +3,7 @@ from flask import Blueprint, render_template, request
 
 from ..database import get_db
 from ..garmin_sync import get_garmin_credentials, get_last_sync_time
-from ..leveling import get_profile_data
+from ..leveling import SKILLS, get_profile_data
 from ..models import get_people, get_person_by_name, get_units
 
 profile_bp = Blueprint("profile", __name__)
@@ -21,18 +21,14 @@ def profile():
 
     # Get leveling data
     profile_data = None
-    total_level = 3  # minimum (all level 1)
+    total_level = len(SKILLS)  # minimum (all skills at level 1)
     person_info = None
     if person:
         db = get_db()
         profile_data = get_profile_data(person, db)
         person_info = get_person_by_name(person)
         if profile_data:
-            total_level = (
-                profile_data["outdoor"]["level"] +
-                profile_data["cardio"]["level"] +
-                profile_data["strength"]["level"]
-            )
+            total_level = sum(profile_data[s]["level"] for s in SKILLS)
 
     # Garmin connection info
     garmin_email, _ = get_garmin_credentials()

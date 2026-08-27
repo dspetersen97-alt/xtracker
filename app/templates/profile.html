@@ -70,53 +70,23 @@
 
 <!-- Individual Skills -->
 <div class="grid">
-    <!-- Outdoor -->
+    {% for skill in ['cardio', 'flexibility', 'steps', 'endurance', 'strength'] %}
+    {% set s = profile[skill] %}
     <article class="skill-card">
         <header>
-            <span class="badge badge-outdoor">Outdoor</span>
+            <span class="badge badge-{{ skill }}">{{ skill | capitalize }}</span>
         </header>
-        <div class="skill-level">{{ profile.outdoor.level }}<span class="skill-max">/99</span></div>
+        <div class="skill-level">{{ s.level }}<span class="skill-max">/99</span></div>
         <div class="xp-bar-container">
-            <div class="xp-bar xp-bar-outdoor" style="width: {{ profile.outdoor.progress_pct }}%;"></div>
+            <div class="xp-bar xp-bar-{{ skill }}" style="width: {{ s.progress_pct }}%;"></div>
         </div>
-        <small>{{ "{:,}".format(profile.outdoor.xp_total) }} XP</small>
+        <small>{{ "{:,}".format(s.xp_total) }} XP</small>
         <div class="skill-tooltip">
-            <span>{{ "{:,}".format(profile.outdoor.xp_total) }} XP / {{ "{:,}".format(profile.outdoor.xp_next_level or profile.outdoor.xp_total) }} XP</span>
-            <span>{{ "{:,}".format(profile.outdoor.xp_for_next) }} XP Remaining</span>
+            <span>{{ "{:,}".format(s.xp_total) }} XP / {{ "{:,}".format(s.xp_next_level or s.xp_total) }} XP</span>
+            <span>{{ "{:,}".format(s.xp_for_next) }} XP Remaining</span>
         </div>
     </article>
-
-    <!-- Cardio -->
-    <article class="skill-card">
-        <header>
-            <span class="badge badge-cardio">Cardio</span>
-        </header>
-        <div class="skill-level">{{ profile.cardio.level }}<span class="skill-max">/99</span></div>
-        <div class="xp-bar-container">
-            <div class="xp-bar xp-bar-cardio" style="width: {{ profile.cardio.progress_pct }}%;"></div>
-        </div>
-        <small>{{ "{:,}".format(profile.cardio.xp_total) }} XP</small>
-        <div class="skill-tooltip">
-            <span>{{ "{:,}".format(profile.cardio.xp_total) }} XP / {{ "{:,}".format(profile.cardio.xp_next_level or profile.cardio.xp_total) }} XP</span>
-            <span>{{ "{:,}".format(profile.cardio.xp_for_next) }} XP Remaining</span>
-        </div>
-    </article>
-
-    <!-- Strength -->
-    <article class="skill-card">
-        <header>
-            <span class="badge badge-strength">Strength</span>
-        </header>
-        <div class="skill-level">{{ profile.strength.level }}<span class="skill-max">/99</span></div>
-        <div class="xp-bar-container">
-            <div class="xp-bar xp-bar-strength" style="width: {{ profile.strength.progress_pct }}%;"></div>
-        </div>
-        <small>{{ "{:,}".format(profile.strength.xp_total) }} XP</small>
-        <div class="skill-tooltip">
-            <span>{{ "{:,}".format(profile.strength.xp_total) }} XP / {{ "{:,}".format(profile.strength.xp_next_level or profile.strength.xp_total) }} XP</span>
-            <span>{{ "{:,}".format(profile.strength.xp_for_next) }} XP Remaining</span>
-        </div>
-    </article>
+    {% endfor %}
 </div>
 
 {% else %}

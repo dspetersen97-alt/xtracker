@@ -36,7 +36,65 @@ def create_activity(activity_date, activity_type, duration_minutes=None,
          weather_temp_c, weather_humidity),
     )
     db.commit()
-    return cursor.lastrowid
+    activity_id = cursor.lastrowid
+
+    # Compute and persist the XP score now so views can read it directly.
+    recompute_activity_score(activity_id)
+    return activity_id
+
+
+def _score_fields_from_row(row):
+    """Build the (activity_data, person_profile) inputs that score_activity
+    needs from a stored activity row (dict or sqlite3.Row)."""
+    get = row.get if isinstance(row, dict) else (lambda k: row[k])
+    activity_data = {
+        "activity_type": get("activity_type"),
+        "distance_km": get("distance_km"),
+        "total_ascent_m": get("total_ascent_m"),
+        "duration_minutes": get("duration_minutes"),
+        "avg_hr": get("avg_hr"),
+        "calories": get("calories"),
+        "weather_temp_c": get("weather_temp_c"),
+        "weather_humidity": get("weather_humidity"),
+    }
+    person_profile = {
+        "weight_kg": get("person_weight_kg"),
+        "sex": get("person_sex"),
+        "birth_year": get("person_birth_year"),
+    }
+    return activity_data, person_profile
+
+
+def set_activity_score(activity_id, score, weather_multiplier):
+    """Persist a computed score and weather multiplier onto an activity row."""
+    db = get_db()
+    db.execute(
+        "UPDATE activities SET score = ?, weather_multiplier = ? WHERE id = ?",
+        (score, weather_multiplier, activity_id),
+    )
+    db.commit()
+
+
+def recompute_activity_score(activity_id):
+    """Recompute and persist an activity's score from its stored snapshot.
+
+    Returns the final score (or None if the activity is not scoreable /
+    not found).
+    """
+    from .scoring import score_activity
+
+    db = get_db()
+    row = db.execute("SELECT * FROM activities WHERE id = ?", (activity_id,)).fetchone()
+    if row is None:
+        return None
+
+    activity_data, person_profile = _score_fields_from_row(row)
+    result = score_activity(activity_data, person_profile)
+
+    score = result["final_score"] if result else None
+    weather_mult = result["weather_multiplier"] if result else None
+    set_activity_score(activity_id, score, weather_mult)
+    return score
 
 
 def get_activities(activity_type=None, date_from=None, date_to=None,
@@ -113,13 +171,21 @@ def delete_activity(activity_id):
 # --- Exercise Types ---
 
 
+def _parse_exercise_type(row):
+    """Convert an exercise_types Row into a dict with parsed skills/fields."""
+    result = dict(row)
+    result["skills_parsed"] = json.loads(result.get("skills") or "{}")
+    result["fields_parsed"] = json.loads(result.get("fields") or "[]")
+    return result
+
+
 def get_exercise_types():
     """Get all exercise types, ordered: defaults first, then custom alphabetically."""
     db = get_db()
     rows = db.execute(
         "SELECT * FROM exercise_types ORDER BY is_default DESC, name ASC"
     ).fetchall()
-    return [dict(row) for row in rows]
+    return [_parse_exercise_type(row) for row in rows]
 
 
 def get_exercise_type_by_name(name):
@@ -130,18 +196,21 @@ def get_exercise_type_by_name(name):
     ).fetchone()
     if row is None:
         return None
-    result = dict(row)
-    result["fields_parsed"] = json.loads(result.get("fields") or "[]")
-    return result
+    return _parse_exercise_type(row)
 
 
-def create_exercise_type(name, category, fields):
-    """Create a custom exercise type. Returns the new ID."""
+def create_exercise_type(name, skills, fields):
+    """Create a custom exercise type. Returns the new ID.
+
+    `skills` is a dict mapping skill name -> percentage (e.g.
+    {"cardio": 75, "endurance": 25}). It is stored as JSON.
+    """
     db = get_db()
     fields_json = json.dumps(fields) if isinstance(fields, list) else fields
+    skills_json = json.dumps(skills) if isinstance(skills, dict) else skills
     cursor = db.execute(
-        "INSERT INTO exercise_types (name, category, fields, is_default) VALUES (?, ?, ?, 0)",
-        (name.lower().strip(), category, fields_json),
+        "INSERT INTO exercise_types (name, skills, fields, is_default) VALUES (?, ?, ?, 0)",
+        (name.lower().strip(), skills_json, fields_json),
     )
     db.commit()
     return cursor.lastrowid
@@ -281,6 +350,9 @@ def update_activity(activity_id, **kwargs):
     db.execute(f"UPDATE activities SET {', '.join(fields)} WHERE id = ?", params)
     db.commit()
 
+    # Any scoring-relevant field may have changed; recompute the stored score.
+    recompute_activity_score(activity_id)
+
 
 
 # --- Daily Health ---
@@ -291,12 +363,9 @@ def upsert_daily_health(date_str, person, **kwargs):
     Uses UPSERT (INSERT OR REPLACE) keyed on (date, person).
     """
     db = get_db()
-    allowed = {
-        "steps", "resting_hr", "calories_total", "calories_active",
-        "stress_avg", "stress_max", "stress_low_duration",
-        "stress_medium_duration", "stress_high_duration",
-        "weight_kg", "vo2_max",
-    }
+    # Only steps and weight are synced. Other daily_health columns remain in
+    # the schema for backward compatibility but are no longer written.
+    allowed = {"steps", "weight_kg"}
 
     # Get existing record to preserve fields not being updated
     existing = get_daily_health(date_str, person)

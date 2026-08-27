@@ -3,7 +3,6 @@ import json
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 
 from ..garmin_sync import (
-    backfill_all_weather,
     clear_garmin_credentials,
     clear_sync_status,
     get_garmin_credentials,
@@ -42,9 +41,12 @@ AVAILABLE_FIELDS = [
     ("notes", "Notes"),
 ]
 
-CATEGORIES = [
-    ("outdoor", "Outdoor"),
+# Workout-assignable skills (Steps is derived from daily step counts only,
+# so it is not assignable in a workout's skill distribution).
+SKILLS = [
     ("cardio", "Cardio"),
+    ("flexibility", "Flexibility"),
+    ("endurance", "Endurance"),
     ("strength", "Strength"),
 ]
 
@@ -68,7 +70,7 @@ def new_exercise_type():
     return render_template(
         "settings_new_type.html",
         available_fields=AVAILABLE_FIELDS,
-        categories=CATEGORIES,
+        skills=SKILLS,
     )
 
 
@@ -76,18 +78,37 @@ def new_exercise_type():
 def create_type():
     """Create a new custom exercise type."""
     name = request.form.get("name", "").strip()
-    category = request.form.get("category", "").strip()
     fields = request.form.getlist("fields")
 
     errors = []
     if not name:
         errors.append("Name is required.")
-    if not category:
-        errors.append("Category is required.")
-    if category and category not in [c[0] for c in CATEGORIES]:
-        errors.append("Invalid category.")
     if not fields:
         errors.append("Select at least one field to track.")
+
+    # Parse skill percentages (one input per skill, e.g. skill_cardio=75)
+    skills = {}
+    for key, _label in SKILLS:
+        raw = request.form.get(f"skill_{key}", "").strip()
+        if not raw:
+            continue
+        try:
+            value = float(raw)
+        except ValueError:
+            errors.append(f"{_label} percentage must be a number.")
+            continue
+        if value < 0:
+            errors.append(f"{_label} percentage cannot be negative.")
+            continue
+        if value > 0:
+            skills[key] = value
+
+    if not skills:
+        errors.append("Assign a percentage to at least one skill.")
+    else:
+        total = sum(skills.values())
+        if round(total, 2) != 100:
+            errors.append(f"Skill percentages must add up to 100% (currently {total:g}%).")
 
     existing_types = get_exercise_types()
     existing_names = [t["name"] for t in existing_types]
@@ -100,7 +121,7 @@ def create_type():
         return render_template(
             "settings_new_type.html",
             available_fields=AVAILABLE_FIELDS,
-            categories=CATEGORIES,
+            skills=SKILLS,
             form=request.form,
         ), 422
 
@@ -109,7 +130,10 @@ def create_type():
     if "notes" not in fields:
         fields.append("notes")
 
-    create_exercise_type(name=name, category=category, fields=fields)
+    # Normalize percentages to ints where possible for clean storage
+    skills = {k: (int(v) if float(v).is_integer() else v) for k, v in skills.items()}
+
+    create_exercise_type(name=name, skills=skills, fields=fields)
     flash(f"Exercise type '{name}' created successfully!", "success")
     return redirect(url_for("settings.exercise_types"))
 
@@ -358,18 +382,6 @@ def garmin_sync_health():
     for err in result["errors"][:5]:
         flash(err, "error")
 
-    return redirect(url_for("settings.exercise_types"))
-
-
-
-@settings_bp.route("/settings/garmin/backfill-weather", methods=["POST"])
-def garmin_backfill_weather():
-    """Backfill weather data for activities with GPS but no weather."""
-    filled = backfill_all_weather()
-    if filled > 0:
-        flash(f"Weather data added for {filled} activities.", "success")
-    else:
-        flash("No activities need weather data (all up to date or missing GPS).", "success")
     return redirect(url_for("settings.exercise_types"))
 
 

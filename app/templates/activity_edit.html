@@ -19,7 +19,7 @@
             <select id="activity_type" name="activity_type" required>
                 {% for et in exercise_types %}
                 <option value="{{ et.name }}" {% if activity.activity_type == et.name %}selected{% endif %}>
-                    {{ et.name | capitalize }}
+                    {{ et.name | exercise_name }}
                 </option>
                 {% endfor %}
             </select>

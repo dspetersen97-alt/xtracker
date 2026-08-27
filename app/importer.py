@@ -24,9 +24,29 @@ GARMIN_TYPE_MAP = {
     "elliptical": "cardio",
     "cardio": "cardio",
     "strength training": "strength",
-    "yoga": "cardio",
+    "yoga": "yoga",
+    "pilates": "pilates",
     "other": "cardio",
 }
+
+# Keywords in a Title that override the mapped type (Garmin often labels
+# yoga/pilates as generic cardio).
+TITLE_TYPE_OVERRIDES = {
+    "yoga": "yoga",
+    "pilates": "pilates",
+}
+
+
+def _resolve_activity_type(raw_type, title):
+    """Resolve internal type from CSV 'Activity Type' + 'Title'.
+    Title keywords take precedence for yoga/pilates.
+    """
+    if title:
+        lowered = title.lower()
+        for keyword, mapped in TITLE_TYPE_OVERRIDES.items():
+            if keyword in lowered:
+                return mapped
+    return GARMIN_TYPE_MAP.get(raw_type, raw_type)
 
 
 def _parse_float(value):
@@ -90,9 +110,12 @@ def import_garmin_csv(file_content, source_units="imperial", person=None):
 
 def _import_row(db, row, source_units, person=None, person_profile=None):
     """Import a single CSV row. Returns True if imported, False if skipped."""
-    # Activity type mapping
+    # Title
+    title = row.get("Title", "").strip() or None
+
+    # Activity type mapping (title can override the Garmin category)
     raw_type = row.get("Activity Type", "").strip().lower()
-    activity_type = GARMIN_TYPE_MAP.get(raw_type, raw_type)
+    activity_type = _resolve_activity_type(raw_type, title)
     if not activity_type:
         return False
 
@@ -101,9 +124,6 @@ def _import_row(db, row, source_units, person=None, person_profile=None):
     if not date_str:
         return False
     activity_date = date_str  # Keep full datetime e.g. '2026-08-24 17:04:37'
-
-    # Title
-    title = row.get("Title", "").strip() or None
 
     # Distance
     distance_raw = _parse_float(row.get("Distance", ""))
@@ -121,13 +141,15 @@ def _import_row(db, row, source_units, person=None, person_profile=None):
     if time_str and time_str != "--":
         parsed = parse_time_string(time_str)
         if parsed is not None:
-            duration_minutes = parsed
+            duration_minutes = round(parsed, 2)
 
     # Elapsed Time
     elapsed_str = row.get("Elapsed Time", "").strip()
     elapsed_time_minutes = None
     if elapsed_str and elapsed_str != "--":
-        elapsed_time_minutes = parse_time_string(elapsed_str)
+        parsed_elapsed = parse_time_string(elapsed_str)
+        if parsed_elapsed is not None:
+            elapsed_time_minutes = round(parsed_elapsed, 2)
 
     # Heart rate
     avg_hr = _parse_int(row.get("Avg HR", ""))
@@ -172,6 +194,13 @@ def _import_row(db, row, source_units, person=None, person_profile=None):
     p_sex = person_profile["sex"] if person_profile else None
     p_birth_year = person_profile["birth_year"] if person_profile else None
 
+    # Compute XP score now so it is stored with the row (CSV imports carry no
+    # weather, so the weather multiplier is 1.0 / None here).
+    score, weather_multiplier = _compute_import_score(
+        activity_type, distance_km, total_ascent_m, duration_minutes,
+        avg_hr, calories, p_weight, p_sex, p_birth_year,
+    )
+
     # Insert
     db.execute(
         """INSERT INTO activities (
@@ -179,12 +208,39 @@ def _import_row(db, row, source_units, person=None, person_profile=None):
             calories, avg_hr, max_hr, avg_pace_sec_per_km, best_pace_sec_per_km,
             total_ascent_m, total_descent_m, steps, elapsed_time_minutes,
             min_elevation_m, max_elevation_m, notes, details, person,
-            person_weight_kg, person_sex, person_birth_year
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', ?, ?, ?, ?)""",
+            person_weight_kg, person_sex, person_birth_year,
+            score, weather_multiplier
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', ?, ?, ?, ?, ?, ?)""",
         (activity_date, activity_type, title, duration_minutes, distance_km,
          calories, avg_hr, max_hr, avg_pace_sec_per_km, best_pace_sec_per_km,
          total_ascent_m, total_descent_m, steps, elapsed_time_minutes,
          min_elevation_m, max_elevation_m, None, person,
-         p_weight, p_sex, p_birth_year),
+         p_weight, p_sex, p_birth_year,
+         score, weather_multiplier),
     )
     return True
+
+
+def _compute_import_score(activity_type, distance_km, total_ascent_m,
+                          duration_minutes, avg_hr, calories,
+                          weight_kg, sex, birth_year):
+    """Compute (score, weather_multiplier) for a CSV row being imported.
+    Returns (None, None) if the activity is not scoreable.
+    """
+    from .scoring import score_activity
+
+    activity_data = {
+        "activity_type": activity_type,
+        "distance_km": distance_km,
+        "total_ascent_m": total_ascent_m,
+        "duration_minutes": duration_minutes,
+        "avg_hr": avg_hr,
+        "calories": calories,
+        "weather_temp_c": None,
+        "weather_humidity": None,
+    }
+    person_profile = {"weight_kg": weight_kg, "sex": sex, "birth_year": birth_year}
+    result = score_activity(activity_data, person_profile)
+    if not result:
+        return None, None
+    return result["final_score"], result["weather_multiplier"]

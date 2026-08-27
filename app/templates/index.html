@@ -28,7 +28,7 @@
 </div>
 
 {% if stats.last_workout %}
-<p><small>Last workout: <strong>{{ stats.last_workout.type | capitalize }}</strong> on {{ stats.last_workout.date }}</small></p>
+<p><small>Last workout: <strong>{{ stats.last_workout.type | exercise_name }}</strong> on {{ stats.last_workout.date }}</small></p>
 {% endif %}
 
 <!-- Quick Actions -->

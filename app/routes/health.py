@@ -58,24 +58,12 @@ def _prepare_chart_data(records):
         return {
             "labels": [],
             "steps": [],
-            "resting_hr": [],
             "weight": [],
-            "vo2_max": [],
-            "calories_total": [],
-            "calories_active": [],
-            "stress_avg": [],
-            "stress_max": [],
         }
 
     labels = [r["date"] for r in records]
     return {
         "labels": labels,
         "steps": [r.get("steps") for r in records],
-        "resting_hr": [r.get("resting_hr") for r in records],
         "weight": [r.get("weight_kg") for r in records],
-        "vo2_max": [r.get("vo2_max") for r in records],
-        "calories_total": [r.get("calories_total") for r in records],
-        "calories_active": [r.get("calories_active") for r in records],
-        "stress_avg": [r.get("stress_avg") for r in records],
-        "stress_max": [r.get("stress_max") for r in records],
     }

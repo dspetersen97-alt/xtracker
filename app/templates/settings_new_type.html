@@ -15,21 +15,32 @@
     <!-- Name -->
     <label for="type-name">Name</label>
     <input type="text" id="type-name" name="name" required
-           placeholder="e.g. Swimming, Yoga, Cycling"
+           placeholder="e.g. Swimming, Rowing, Cycling"
            value="{{ form.get('name', '') if form else '' }}">
     <small>Use a simple, descriptive name. It will appear in the activity type dropdown.</small>
 
-    <!-- Category -->
-    <label for="type-category">Category</label>
-    <select id="type-category" name="category" required aria-label="Select category">
-        <option value="" disabled {% if not form or not form.get('category') %}selected{% endif %}>Choose a category...</option>
-        {% for value, label in categories %}
-        <option value="{{ value }}" {% if form and form.get('category') == value %}selected{% endif %}>
-            {{ label }}
-        </option>
-        {% endfor %}
-    </select>
-    <small>Category determines how this type appears in charts and badges.</small>
+    <!-- Skill distribution -->
+    <fieldset>
+        <legend>Skill Distribution</legend>
+        <small>Assign a percentage of this activity's XP to each skill. The values must add up to 100%.</small>
+
+        <div id="skill-inputs" style="margin-top: 0.75rem;">
+            {% for value, label in skills %}
+            <label for="skill-{{ value }}">
+                {{ label }}
+                <input type="number" id="skill-{{ value }}" name="skill_{{ value }}"
+                       class="skill-pct" min="0" max="100" step="1"
+                       placeholder="0"
+                       value="{{ form.get('skill_' ~ value, '') if form else '' }}">
+            </label>
+            {% endfor %}
+        </div>
+
+        <p style="margin: 0.5rem 0 0;">
+            Total: <strong id="skill-total">0</strong>%
+            <span id="skill-total-msg" style="margin-left: 0.5rem; font-size: 0.85rem;"></span>
+        </p>
+    </fieldset>
 
     <!-- Fields to track -->
     <fieldset>
@@ -49,8 +60,48 @@
 
     <!-- Submit -->
     <div class="grid">
-        <button type="submit">Create Type</button>
+        <button type="submit" id="create-btn">Create Type</button>
         <a href="{{ url_for('settings.exercise_types') }}" role="button" class="secondary outline">Cancel</a>
     </div>
 </form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var inputs = document.querySelectorAll('.skill-pct');
+    var totalEl = document.getElementById('skill-total');
+    var msgEl = document.getElementById('skill-total-msg');
+    var createBtn = document.getElementById('create-btn');
+
+    function recomputeTotal() {
+        var total = 0;
+        inputs.forEach(function(input) {
+            var v = parseFloat(input.value);
+            if (!isNaN(v) && v > 0) total += v;
+        });
+        // Trim trailing zeros for display
+        totalEl.textContent = (Math.round(total * 100) / 100);
+
+        if (total === 100) {
+            msgEl.textContent = '✓ Ready';
+            msgEl.style.color = 'var(--pico-ins-color, green)';
+            createBtn.removeAttribute('disabled');
+        } else if (total === 0) {
+            msgEl.textContent = 'Assign percentages to at least one skill';
+            msgEl.style.color = 'var(--pico-muted-color)';
+            createBtn.setAttribute('disabled', '');
+        } else {
+            msgEl.textContent = 'Must total 100%';
+            msgEl.style.color = 'var(--pico-del-color, #b00)';
+            createBtn.setAttribute('disabled', '');
+        }
+    }
+
+    inputs.forEach(function(input) {
+        input.addEventListener('input', recomputeTotal);
+    });
+    recomputeTotal();
+});
+</script>
 {% endblock %}

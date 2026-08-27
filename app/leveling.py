@@ -1,36 +1,51 @@
-"""RuneScape-style leveling system.
+"""Leveling system with a flattened power-curve progression.
 
-XP formula matches RuneScape's level progression:
-- Level 1->2: 83 XP
-- Level 98->99: 1,228,825 XP
+XP curve: total XP to reach level L = C * (L-1)^2.2, calibrated so
+level 99 requires ~13,034,431 XP (the same endpoint as the classic
+RuneScape curve). Compared to RuneScape, this flattens the escalation:
+lower levels cost relatively more and higher levels relatively less,
+while still growing meaningfully as levels increase.
+
+- Level 1:  0 XP
+- Level 2:  ~542 XP
+- Level 50: ~2,837,000 XP
+- Level 99: ~13,034,431 XP
 - Max level: 99
 
-Three skills based on activity categories:
-- Strength (strength activities)
-- Cardio (cardio activities)
-- Outdoor (hike, walk, run)
+Skills (5 total):
+- Cardio
+- Flexibility
+- Steps (daily step counts only)
+- Endurance
+- Strength
 
-Activity scores are converted directly to XP for the appropriate skill.
+Each exercise type carries a skill % distribution (e.g. Run = 75% Cardio,
+25% Endurance). An activity's score is split proportionally across those
+skills. Steps is not assignable from workouts; it is derived from daily
+step counts.
 """
 
-import math
+import json
 
 MAX_LEVEL = 99
+
+# Curve parameters
+_CURVE_EXPONENT = 2.2
+_LEVEL_99_XP = 13_034_431  # keep the classic endpoint
 
 # Pre-compute XP table (total XP needed to reach each level)
 _XP_TABLE = [0] * (MAX_LEVEL + 1)
 
 
 def _build_xp_table():
-    """Build the XP-per-level table using the RuneScape formula.
-    
-    Total XP for level L = floor(sum for x=1 to L-1 of floor(x + 300 * 2^(x/7)) / 4)
+    """Build the XP table using a power curve: XP(L) = C * (L-1)^exponent.
+
+    C is calibrated so that reaching MAX_LEVEL costs exactly _LEVEL_99_XP.
     """
+    c = _LEVEL_99_XP / ((MAX_LEVEL - 1) ** _CURVE_EXPONENT)
     _XP_TABLE[1] = 0  # Level 1 starts at 0 XP
-    total = 0
-    for x in range(1, MAX_LEVEL):
-        total += math.floor(x + 300 * (2 ** (x / 7)))
-        _XP_TABLE[x + 1] = math.floor(total / 4)
+    for level in range(2, MAX_LEVEL + 1):
+        _XP_TABLE[level] = round(c * ((level - 1) ** _CURVE_EXPONENT))
 
 
 _build_xp_table()
@@ -97,94 +112,147 @@ def xp_progress(xp):
     }
 
 
-# Skill category mapping
-SKILL_CATEGORIES = {
-    "strength": "strength",
-    "cardio": "cardio",
-    "outdoor": "outdoor",
-}
-
-# Map activity types to skills
-ACTIVITY_TYPE_TO_SKILL = {
-    "run": "outdoor",
-    "walk": "outdoor",
-    "hike": "outdoor",
-    "cardio": "cardio",
-    "strength": "strength",
-}
+# The five skills. "steps" is derived from daily step counts only and is not
+# assignable via workout skill distributions (the other four are).
+SKILLS = ["cardio", "flexibility", "steps", "endurance", "strength"]
+WORKOUT_SKILLS = ["cardio", "flexibility", "endurance", "strength"]
 
 
-def get_skill_for_activity(activity_type):
-    """Get the skill category for a given activity type."""
-    return ACTIVITY_TYPE_TO_SKILL.get(activity_type)
+def get_skill_distribution(activity_type, db):
+    """Get the skill % distribution for an exercise type as a normalized
+    dict of {skill: fraction}, where fractions sum to 1.0.
+
+    Returns an empty dict if the type is unknown or has no distribution.
+    """
+    if not activity_type:
+        return {}
+    row = db.execute(
+        "SELECT skills FROM exercise_types WHERE name = ?",
+        (activity_type,),
+    ).fetchone()
+    if row is None:
+        return {}
+    try:
+        raw = json.loads(row["skills"] or "{}")
+    except (ValueError, TypeError):
+        return {}
+
+    # Keep only valid workout skills with positive weight
+    weights = {
+        k: float(v)
+        for k, v in raw.items()
+        if k in WORKOUT_SKILLS and _is_positive_number(v)
+    }
+    total = sum(weights.values())
+    if total <= 0:
+        return {}
+    return {k: v / total for k, v in weights.items()}
+
+
+def _is_positive_number(v):
+    try:
+        return float(v) > 0
+    except (ValueError, TypeError):
+        return False
+
+
+# Steps skill: three-tier daily rates (per step)
+XP_PER_STEP_TIER1 = 500 / 1000.0     # steps 1-5,000:      500 XP / 1000
+XP_PER_STEP_TIER2 = 1000 / 1000.0    # steps 5,000-10,000: 1000 XP / 1000
+XP_PER_STEP_TIER3 = 2000 / 1000.0    # steps 10,000+:      2000 XP / 1000
+STEP_TIER1_CAP = 5000
+STEP_TIER2_CAP = 10000
+
+
+def steps_xp_for_day(steps):
+    """Compute Steps XP for a single day's step count, with three tiers.
+
+    Steps 1-5,000       earn 500 XP per 1,000.
+    Steps 5,000-10,000  earn 1,000 XP per 1,000.
+    Steps 10,000+       earn 2,000 XP per 1,000.
+    """
+    if not steps or steps <= 0:
+        return 0.0
+
+    tier1 = min(steps, STEP_TIER1_CAP)
+    tier2 = min(max(steps - STEP_TIER1_CAP, 0), STEP_TIER2_CAP - STEP_TIER1_CAP)
+    tier3 = max(steps - STEP_TIER2_CAP, 0)
+
+    return (
+        tier1 * XP_PER_STEP_TIER1
+        + tier2 * XP_PER_STEP_TIER2
+        + tier3 * XP_PER_STEP_TIER3
+    )
+
+
+def get_steps_xp(person, db):
+    """Get total Steps-skill XP from daily step counts.
+    Three-tier per day: 500 / 1000 / 2000 XP per 1000 steps.
+    Applied per day so the thresholds reset each day.
+    """
+    rows = db.execute(
+        "SELECT steps FROM daily_health WHERE person = ? AND steps IS NOT NULL",
+        (person,),
+    ).fetchall()
+
+    total_xp = sum(steps_xp_for_day(row["steps"]) for row in rows if row["steps"])
+    return round(total_xp)
 
 
 def get_skill_xp(person, db):
     """Get total XP for each skill for a person.
-    
-    Sums all activity scores grouped by skill category.
-    Returns dict with 'strength', 'cardio', 'outdoor' XP totals.
+
+    Each activity's score is split across the skills its exercise type is
+    assigned to (per that type's % distribution). Steps XP is added from
+    daily health data.
+
+    Returns dict with 'cardio', 'flexibility', 'endurance', 'strength',
+    and 'steps' XP totals.
     """
-    skills = {"strength": 0, "cardio": 0, "outdoor": 0}
-    
+    skills = {s: 0.0 for s in WORKOUT_SKILLS}
+
+    # Read the pre-computed score stored on each activity and split it across
+    # the exercise type's skills. Scores are persisted at write time
+    # (create/edit/import) and via the refresh_xp script, so no re-scoring
+    # happens on read.
     rows = db.execute(
-        """SELECT activity_type, distance_km, total_ascent_m, duration_minutes,
-                  avg_hr, calories, person_weight_kg, person_sex, person_birth_year,
-                  weather_temp_c, weather_humidity
-           FROM activities
-           WHERE person = ? AND activity_type IN ('run', 'walk', 'hike', 'cardio', 'strength')""",
+        "SELECT activity_type, score FROM activities WHERE person = ? AND score IS NOT NULL",
         (person,),
     ).fetchall()
-    
-    from .scoring import score_activity
-    
+
     for row in rows:
-        activity_type = row["activity_type"]
-        skill = get_skill_for_activity(activity_type)
-        if not skill:
+        score = row["score"]
+        if not score:
             continue
-        
-        # Compute score dynamically (same as display)
-        activity_data = {
-            "activity_type": activity_type,
-            "distance_km": row["distance_km"],
-            "total_ascent_m": row["total_ascent_m"],
-            "duration_minutes": row["duration_minutes"],
-            "avg_hr": row["avg_hr"],
-            "calories": row["calories"],
-            "weather_temp_c": row["weather_temp_c"],
-            "weather_humidity": row["weather_humidity"],
-        }
-        person_profile = {
-            "weight_kg": row["person_weight_kg"],
-            "sex": row["person_sex"],
-            "birth_year": row["person_birth_year"],
-        }
-        
-        result = score_activity(activity_data, person_profile)
-        if result and result["final_score"]:
-            skills[skill] += result["final_score"]
-    
-    # Round totals
-    return {k: round(v) for k, v in skills.items()}
+        distribution = get_skill_distribution(row["activity_type"], db)
+        if not distribution:
+            continue
+        for skill, fraction in distribution.items():
+            skills[skill] += score * fraction
+
+    # Round activity-based totals
+    result = {k: round(v) for k, v in skills.items()}
+    # Add steps skill XP from daily health data
+    result["steps"] = get_steps_xp(person, db)
+    return result
 
 
 def get_profile_data(person, db):
     """Get full leveling profile for a person.
-    
-    Returns dict with skill data for strength, cardio, outdoor,
-    plus a combined 'total' level.
+
+    Returns dict with skill data for cardio, flexibility, endurance,
+    strength, and steps, plus a combined 'total' level.
     """
     skill_xp = get_skill_xp(person, db)
-    
+
     profile = {}
     total_xp = 0
-    
-    for skill in ("strength", "cardio", "outdoor"):
+
+    for skill in SKILLS:
         xp = skill_xp[skill]
         total_xp += xp
         profile[skill] = xp_progress(xp)
-    
+
     profile["total"] = xp_progress(total_xp)
-    
+
     return profile

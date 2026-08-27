@@ -26,7 +26,7 @@
                 <thead>
                     <tr>
                         <th>Name</th>
-                        <th>Category</th>
+                        <th>Skills</th>
                         <th>Fields</th>
                         <th>Actions</th>
                     </tr>
@@ -35,13 +35,14 @@
                     {% for et in exercise_types %}
                     <tr>
                         <td>
-                            <strong>{{ et.name | capitalize }}</strong>
-                            {% if et.is_default %}
-                            <small>(default)</small>
-                            {% endif %}
+                            <strong>{{ et.name | exercise_name }}</strong>
                         </td>
                         <td>
-                            <span class="badge badge-{{ et.category }}">{{ et.category | capitalize }}</span>
+                            {% for skill, pct in et.skills_parsed.items() %}
+                            <span class="badge badge-{{ skill }}" style="margin: 0 0.15rem 0.15rem 0;">{{ skill | capitalize }} {{ pct }}%</span>
+                            {% else %}
+                            <small>-</small>
+                            {% endfor %}
                         </td>
                         <td>
                             <small>{{ et.fields | replace('[', '') | replace(']', '') | replace('"', '') }}</small>

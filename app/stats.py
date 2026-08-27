@@ -321,7 +321,7 @@ def get_type_stats(activity_type, weeks_back=12):
 def weekly_health_averages(person=None, weeks_back=12):
     """Get weekly averages of key health metrics for the progress page.
 
-    Returns dict with 'labels' (week starts), 'resting_hr', 'weight', 'steps_avg', 'vo2_max'.
+    Returns dict with 'labels' (week starts), 'weight', and 'steps_avg'.
     Each value list has one entry per week.
     If person is None, averages across all people.
     """
@@ -330,7 +330,7 @@ def weekly_health_averages(person=None, weeks_back=12):
     start_date = weeks[0].isoformat()
 
     query = """
-        SELECT date, resting_hr, weight_kg, steps, vo2_max
+        SELECT date, weight_kg, steps
         FROM daily_health
         WHERE date >= ?
     """
@@ -344,7 +344,7 @@ def weekly_health_averages(person=None, weeks_back=12):
     rows = db.execute(query, params).fetchall()
 
     # Bucket into weeks
-    week_data = {w: {"hr": [], "weight": [], "steps": [], "vo2": []} for w in weeks}
+    week_data = {w: {"weight": [], "steps": []} for w in weeks}
 
     for row in rows:
         try:
@@ -353,14 +353,10 @@ def weekly_health_averages(person=None, weeks_back=12):
             continue
         ws = _week_start(d)
         if ws in week_data:
-            if row["resting_hr"]:
-                week_data[ws]["hr"].append(row["resting_hr"])
             if row["weight_kg"]:
                 week_data[ws]["weight"].append(row["weight_kg"])
             if row["steps"]:
                 week_data[ws]["steps"].append(row["steps"])
-            if row["vo2_max"]:
-                week_data[ws]["vo2"].append(row["vo2_max"])
 
     # Compute averages per week
     def avg(lst):
@@ -368,8 +364,6 @@ def weekly_health_averages(person=None, weeks_back=12):
 
     return {
         "labels": [w.strftime("%b %d") for w in weeks],
-        "resting_hr": [avg(week_data[w]["hr"]) for w in weeks],
         "weight": [avg(week_data[w]["weight"]) for w in weeks],
         "steps_avg": [avg(week_data[w]["steps"]) for w in weeks],
-        "vo2_max": [avg(week_data[w]["vo2"]) for w in weeks],
     }

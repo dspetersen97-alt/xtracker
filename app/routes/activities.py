@@ -15,56 +15,84 @@ from ..models import (
     update_activity,
 )
 import json
-from ..scoring import score_activity
 from ..units import convert_activity_for_display
 
 
-def _compute_score(activity):
-    """Compute score dynamically from the activity's stored snapshot fields.
-    Modifies activity dict in place to add 'computed_score', 'weather_multiplier_computed', 'skill_name'.
+def _compute_score(activity, profile=None):
+    """Attach display XP fields to an activity using its stored score.
+
+    Reads the pre-computed 'score' column (persisted at write time) rather
+    than re-scoring on every view. Splits that score across the exercise
+    type's skills for display.
+
+    `profile` is the person's leveling profile (from get_profile_data). Pass
+    it in so callers can compute it once per request instead of once per row.
+
+    Adds to the activity dict:
+      - 'computed_score': total workout XP (before splitting)
+      - 'weather_multiplier_computed'
+      - 'skill_breakdown': list of {skill, xp, pct, level} the XP is split into
+      - 'steps_xp' / 'steps_level'
+      - 'combined_xp': workout XP + steps XP
+      - 'total_fitness_level': sum of all skill levels
     """
-    from ..leveling import ACTIVITY_TYPE_TO_SKILL
+    from ..database import get_db
+    from ..leveling import SKILLS, get_skill_distribution, steps_xp_for_day
 
-    # Build a person profile from the snapshot stored on the activity
-    person_profile = {
-        "weight_kg": activity.get("person_weight_kg"),
-        "sex": activity.get("person_sex"),
-        "birth_year": activity.get("person_birth_year"),
-    }
+    db = get_db()
 
-    result = score_activity(activity, person_profile)
-    if result:
-        activity["computed_score"] = result["final_score"]
-        activity["weather_multiplier_computed"] = result["weather_multiplier"]
-    else:
-        activity["computed_score"] = None
-        activity["weather_multiplier_computed"] = None
+    # Use the stored score (computed at write time / by refresh_xp).
+    total_score = activity.get("score") or 0
+    activity["computed_score"] = activity.get("score")
+    activity["weather_multiplier_computed"] = activity.get("weather_multiplier")
 
-    # Add skill category name and levels
-    activity["skill_name"] = ACTIVITY_TYPE_TO_SKILL.get(activity.get("activity_type"), "")
+    # Split the workout XP across the exercise type's assigned skills
+    distribution = get_skill_distribution(activity.get("activity_type"), db)
+    breakdown = []
+    for skill, fraction in sorted(distribution.items(), key=lambda kv: -kv[1]):
+        breakdown.append({
+            "skill": skill,
+            "xp": round(total_score * fraction),
+            "pct": round(fraction * 100),
+            "level": None,
+        })
+    activity["skill_breakdown"] = breakdown
 
-    # Compute skill level and total fitness level if person is set
-    activity["skill_level"] = None
+    # Steps XP for this activity (three-tier: 500/1000/2000 per 1000 steps)
+    steps = activity.get("steps")
+    activity["steps_xp"] = round(steps_xp_for_day(steps)) if steps else 0
+
+    # Combined preview total: workout XP + steps XP
+    activity["combined_xp"] = round(total_score) + activity["steps_xp"]
+
+    # Attach skill levels and total fitness level from the precomputed profile
+    activity["steps_level"] = None
     activity["total_fitness_level"] = None
-    if activity.get("person"):
-        try:
-            from ..leveling import get_profile_data
-            from ..database import get_db
-            db = get_db()
-            profile = get_profile_data(activity["person"], db)
-            if profile:
-                skill = activity["skill_name"]
-                if skill and skill in profile:
-                    activity["skill_level"] = profile[skill]["level"]
-                activity["total_fitness_level"] = (
-                    profile["outdoor"]["level"] +
-                    profile["cardio"]["level"] +
-                    profile["strength"]["level"]
-                )
-        except Exception:
-            pass
+    if profile:
+        for item in breakdown:
+            if item["skill"] in profile:
+                item["level"] = profile[item["skill"]]["level"]
+        activity["steps_level"] = profile["steps"]["level"]
+        activity["total_fitness_level"] = sum(profile[s]["level"] for s in SKILLS)
 
     return activity
+
+
+def _profiles_for_activities(activities, db):
+    """Compute each distinct person's leveling profile once. Returns
+    {person_name: profile} so per-row rendering can look levels up cheaply.
+    """
+    from ..leveling import get_profile_data
+
+    profiles = {}
+    for a in activities:
+        person = a.get("person")
+        if person and person not in profiles:
+            try:
+                profiles[person] = get_profile_data(person, db)
+            except Exception:
+                profiles[person] = None
+    return profiles
 
 activities_bp = Blueprint("activities", __name__)
 
@@ -288,8 +316,14 @@ def history():
     exercise_types = get_exercise_types()
     units = get_units()
 
-    # Convert activities for display and compute scores dynamically
-    display_activities = [_compute_score(convert_activity_for_display(a, units)) for a in activities]
+    # Compute each person's leveling profile once, then attach display XP
+    # fields to each activity from the stored score.
+    from ..database import get_db
+    profiles = _profiles_for_activities(activities, get_db())
+    display_activities = [
+        _compute_score(convert_activity_for_display(a, units), profiles.get(a.get("person")))
+        for a in activities
+    ]
 
     people = get_people()
     return render_template(
@@ -317,7 +351,15 @@ def activity_detail(activity_id):
         return redirect(url_for("activities.history"))
 
     units = get_units()
-    display = _compute_score(convert_activity_for_display(activity, units))
+    profile = None
+    if activity.get("person"):
+        from ..database import get_db
+        from ..leveling import get_profile_data
+        try:
+            profile = get_profile_data(activity["person"], get_db())
+        except Exception:
+            profile = None
+    display = _compute_score(convert_activity_for_display(activity, units), profile)
     return render_template("activity_detail.html", activity=display, units=units)
 
 
@@ -460,4 +502,5 @@ def activity_edit_submit(activity_id):
 
     update_activity(activity_id, **updates)
     flash("Workout updated.", "success")
-    return redirect(url_for("activities.activity_detail", activity_id=activity_id))
+    return redirect(url_for("activities.history"))
+    #return redirect(url_for("activities.activity_detail", activity_id=activity_id))

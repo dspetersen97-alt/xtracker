@@ -12,7 +12,7 @@
             <option value="">All types</option>
             {% for et in exercise_types %}
             <option value="{{ et.name }}" {% if current_type == et.name %}selected{% endif %}>
-                {{ et.name | capitalize }}
+                {{ et.name | exercise_name }}
             </option>
             {% endfor %}
         </select>
@@ -56,16 +56,16 @@
             <div class="history-header-top">
                 <div>
                     <span class="history-arrow">&#9654;</span>
-                    <span class="badge badge-{{ 'outdoor' if activity.activity_type in ('hike', 'walk', 'run') else ('strength' if activity.activity_type == 'strength' else 'cardio') }}">
-                        {{ activity.activity_type | capitalize }}
+                    <span class="badge badge-{{ activity.skill_breakdown[0].skill if activity.skill_breakdown else 'cardio' }}">
+                        {{ activity.activity_type | exercise_name }}
                     </span>
-                    <strong style="margin-left: 0.5rem;">{% if activity.title %}{{ activity.title }}{% else %}{{ activity.activity_date }}{% endif %}</strong>
+                    <strong style="margin-left: 0.5rem;">{% if activity.title %}{{ activity.title }}{% else %}{{ activity.activity_date_display }}{% endif %}</strong>
                 </div>
-                {% if activity.computed_score %}
-                <span class="history-xp">{{ activity.computed_score | round(0) | int }} XP</span>
+                {% if activity.combined_xp %}
+                <span class="history-xp">+{{ activity.combined_xp }} XP</span>
                 {% endif %}
             </div>
-            <small class="history-date">{{ activity.activity_date }}{% if activity.person %} &middot; {{ activity.person }}{% endif %}</small>
+            <small class="history-date">{{ activity.activity_date_display }}{% if activity.person %} &middot; {{ activity.person }}{% endif %}</small>
             <div class="history-metrics">
                 {% if activity.duration_display and activity.duration_display != '--' %}
                 <span>&#9201; {{ activity.duration_display }}</span>
@@ -211,13 +211,25 @@
             </figure>
             {% endif %}
 
-            {% if activity.computed_score %}
+            {% if activity.computed_score or activity.steps_xp %}
             <div class="history-xp-footer">
                 <div class="history-xp-left">
-                    <span class="history-xp-skill">{{ activity.skill_name | capitalize }} Level: {{ activity.skill_level or 1 }}</span>
-                    <span class="history-xp-gained">+{{ activity.computed_score | round(0) | int }} XP</span>
+                    {% for item in activity.skill_breakdown %}
+                    {% if item.xp %}
+                    <div class="history-xp-row">
+                        <span class="history-xp-skill">{{ item.skill | capitalize }} Level: {{ item.level or 1 }}</span>
+                        <span class="history-xp-gained">+{{ item.xp }} XP</span>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                    {% if activity.steps_xp %}
+                    <div class="history-xp-row">
+                        <span class="history-xp-skill">Steps Level: {{ activity.steps_level or 1 }}</span>
+                        <span class="history-xp-gained">+{{ activity.steps_xp }} XP</span>
+                    </div>
+                    {% endif %}
                 </div>
-                <span class="history-xp-total">Total Fitness Level: {{ activity.total_fitness_level or 3 }}</span>
+                <span class="history-xp-total">Total Fitness Level: {{ activity.total_fitness_level or 5 }}</span>
             </div>
             {% endif %}
 

@@ -32,14 +32,36 @@ GARMIN_TYPE_MAP = {
     "elliptical": "cardio",
     "cardio": "cardio",
     "strength_training": "strength",
-    "yoga": "cardio",
-    "pilates": "cardio",
+    "yoga": "yoga",
+    "pilates": "pilates",
     "other": "cardio",
     "fitness_equipment": "cardio",
     "indoor_cardio": "cardio",
     "mountaineering": "hike",
     "rock_climbing": "strength",
 }
+
+# Keywords found in an activity Title that override the mapped type.
+# Garmin often labels yoga/pilates sessions as generic cardio, so we
+# recover the real type from the title text.
+TITLE_TYPE_OVERRIDES = {
+    "yoga": "yoga",
+    "pilates": "pilates",
+}
+
+
+def resolve_activity_type(type_key, title):
+    """Resolve the internal activity type from a Garmin type key and title.
+
+    The title takes precedence for known keywords (e.g. a session titled
+    "Yoga" becomes "yoga" even if Garmin categorized it as cardio).
+    """
+    if title:
+        lowered = title.lower()
+        for keyword, mapped in TITLE_TYPE_OVERRIDES.items():
+            if keyword in lowered:
+                return mapped
+    return GARMIN_TYPE_MAP.get(type_key, "cardio")
 
 
 def save_garmin_credentials(email, password):
@@ -198,7 +220,7 @@ def sync_activities(person_name=None, days_back=30):
                 skipped += 1
                 continue
 
-            if _import_garmin_activity(db, activity, person_name, person_profile, garmin_id):
+            if _import_garmin_activity(db, activity, person_name, person_profile, garmin_id, garmin):
                 imported += 1
             else:
                 skipped += 1
@@ -233,32 +255,35 @@ def _get_existing_garmin_ids(db):
     return ids
 
 
-def _import_garmin_activity(db, activity, person_name, person_profile, garmin_id):
+def _import_garmin_activity(db, activity, person_name, person_profile, garmin_id, garmin=None):
     """Import a single Garmin activity into the database.
     Returns True if imported, False if skipped.
+
+    If a `garmin` client is provided, weather is fetched inline for outdoor
+    activities (run/walk/hike) at import time.
     """
     import json
 
-    # Map activity type
+    # Title
+    title = activity.get("activityName") or None
+
+    # Map activity type (title can override the Garmin category)
     type_info = activity.get("activityType", {})
     type_key = type_info.get("typeKey", "other") if isinstance(type_info, dict) else "other"
-    activity_type = GARMIN_TYPE_MAP.get(type_key, "cardio")
+    activity_type = resolve_activity_type(type_key, title)
 
     # Date/time
     start_time = activity.get("startTimeLocal", "")
     if not start_time:
         return False
 
-    # Title
-    title = activity.get("activityName") or None
-
-    # Duration (seconds -> minutes)
+    # Duration (seconds -> minutes), rounded to 2 decimals
     duration_sec = activity.get("duration")
-    duration_minutes = duration_sec / 60.0 if duration_sec else None
+    duration_minutes = round(duration_sec / 60.0, 2) if duration_sec else None
 
-    # Elapsed time
+    # Elapsed time, rounded to 2 decimals
     elapsed_sec = activity.get("elapsedDuration") or activity.get("duration")
-    elapsed_time_minutes = elapsed_sec / 60.0 if elapsed_sec else None
+    elapsed_time_minutes = round(elapsed_sec / 60.0, 2) if elapsed_sec else None
 
     # Distance (meters -> km)
     distance_m = activity.get("distance")
@@ -311,6 +336,20 @@ def _import_garmin_activity(db, activity, person_name, person_profile, garmin_id
     # Store garmin_id in details for deduplication
     details = json.dumps({"garmin_id": garmin_id})
 
+    # Weather (inline, for outdoor activities only)
+    weather_temp_c = None
+    weather_humidity = None
+    if garmin is not None and activity_type in ("run", "walk", "hike"):
+        weather_temp_c, weather_humidity = _fetch_activity_weather(garmin, garmin_id)
+
+    # Compute the XP score now so it can be stored with the row (avoids a
+    # separate recompute pass and per-request re-scoring later).
+    score, weather_multiplier = _compute_import_score(
+        activity_type, distance_km, total_ascent_m, duration_minutes,
+        avg_hr, calories, weather_temp_c, weather_humidity,
+        p_weight, p_sex, p_birth_year,
+    )
+
     db.execute(
         """INSERT INTO activities (
             activity_date, activity_type, title, duration_minutes, distance_km,
@@ -318,112 +357,97 @@ def _import_garmin_activity(db, activity, person_name, person_profile, garmin_id
             total_ascent_m, total_descent_m, steps, elapsed_time_minutes,
             min_elevation_m, max_elevation_m, notes, details, person,
             person_weight_kg, person_sex, person_birth_year,
-            start_latitude, start_longitude
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            start_latitude, start_longitude, weather_temp_c, weather_humidity,
+            score, weather_multiplier
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (start_time, activity_type, title, duration_minutes, distance_km,
          calories, avg_hr, max_hr, avg_pace_sec_per_km, best_pace_sec_per_km,
          total_ascent_m, total_descent_m, steps, elapsed_time_minutes,
          None, None, None, details, person_name,
          p_weight, p_sex, p_birth_year,
-         start_lat, start_lng),
+         start_lat, start_lng, weather_temp_c, weather_humidity,
+         score, weather_multiplier),
     )
     return True
 
 
-
-def _backfill_weather(db, garmin):
-    """Backfill weather data for activities using Garmin's activity weather API.
-    Only processes run/walk/hike activities that have a garmin_id but no weather.
-    Returns count of activities updated.
+def _compute_import_score(activity_type, distance_km, total_ascent_m,
+                          duration_minutes, avg_hr, calories,
+                          weather_temp_c, weather_humidity,
+                          weight_kg, sex, birth_year):
+    """Compute (score, weather_multiplier) for a row being imported.
+    Returns (None, None) if the activity is not scoreable.
     """
-    import json as json_mod
-    import time
+    from .scoring import score_activity
 
-    rows = db.execute(
-        """SELECT id, details
-         FROM activities
-         WHERE weather_temp_c IS NULL
-           AND activity_type IN ('run', 'walk', 'hike')
-           AND details LIKE '%garmin_id%'
-         ORDER BY activity_date DESC"""
-    ).fetchall()
-
-    if not rows:
-        return 0
-
-    filled = 0
-    total = len(rows)
-    for i, row in enumerate(rows, 1):
-        try:
-            details = json_mod.loads(row["details"] or "{}")
-            garmin_id = details.get("garmin_id")
-            if not garmin_id:
-                continue
-
-            _set_sync_status(f"Fetching weather data... ({i}/{total})")
-            weather = garmin.get_activity_weather(str(garmin_id))
-
-            if weather:
-                temp = weather.get("temp")
-                humidity = weather.get("relativeHumidity")
-
-                # Some responses nest differently
-                if temp is None:
-                    temp = weather.get("temperature")
-                if humidity is None:
-                    humidity = weather.get("humidity")
-
-                if temp is not None:
-                    temp = float(temp)
-                    # Garmin returns temp in user display units.
-                    # Convert to Celsius if it looks like Fahrenheit.
-                    # Reasonable outdoor temp in C is -50 to 55. Above 55 is almost certainly F.
-                    if temp > 55:
-                        temp = (temp - 32) * 5 / 9
-                    db.execute(
-                        "UPDATE activities SET weather_temp_c = ?, weather_humidity = ? WHERE id = ?",
-                        (round(temp, 1), float(humidity) if humidity else None, row["id"]),
-                    )
-                    filled += 1
-
-            # Be polite with rate limiting
-            time.sleep(0.15)
-        except Exception as e:
-            logger.warning(f"Weather backfill failed for activity {row['id']}: {e}")
-            continue
-
-    return filled
+    activity_data = {
+        "activity_type": activity_type,
+        "distance_km": distance_km,
+        "total_ascent_m": total_ascent_m,
+        "duration_minutes": duration_minutes,
+        "avg_hr": avg_hr,
+        "calories": calories,
+        "weather_temp_c": weather_temp_c,
+        "weather_humidity": weather_humidity,
+    }
+    person_profile = {"weight_kg": weight_kg, "sex": sex, "birth_year": birth_year}
+    result = score_activity(activity_data, person_profile)
+    if not result:
+        return None, None
+    return result["final_score"], result["weather_multiplier"]
 
 
-def backfill_all_weather():
-    """Manually trigger weather backfill for all eligible activities.
-    Requires Garmin connection. Called from a route.
-    Returns count of activities updated.
+def _fetch_activity_weather(garmin, garmin_id):
+    """Fetch weather for a single activity. Returns (temp_c, humidity) or
+    (None, None) on any failure. Temperatures that look like Fahrenheit are
+    converted to Celsius.
     """
-    email, password = get_garmin_credentials()
-    if not email or not password:
-        return 0
-
     try:
-        from garminconnect import Garmin
-        token_dir = _get_token_dir()
-        garmin = Garmin(email=email, password=password)
-        garmin.login(token_dir)
-    except Exception:
-        return 0
+        weather = garmin.get_activity_weather(str(garmin_id))
+    except Exception as e:
+        logger.warning(f"Weather fetch failed for activity {garmin_id}: {e}")
+        return None, None
 
-    db = get_db()
-    filled = _backfill_weather(db, garmin)
-    if filled > 0:
-        db.commit()
-    return filled
+    if not weather:
+        return None, None
+
+    temp = weather.get("temp")
+    if temp is None:
+        temp = weather.get("temperature")
+    humidity = weather.get("relativeHumidity")
+    if humidity is None:
+        humidity = weather.get("humidity")
+
+    temp_c = None
+    if temp is not None:
+        try:
+            temp = float(temp)
+            # Garmin returns temp in user display units. A value above 55 is
+            # almost certainly Fahrenheit (reasonable outdoor C is -50..55).
+            if temp > 55:
+                temp = (temp - 32) * 5 / 9
+            temp_c = round(temp, 1)
+        except (ValueError, TypeError):
+            temp_c = None
+
+    humidity_val = None
+    if humidity is not None:
+        try:
+            humidity_val = float(humidity)
+        except (ValueError, TypeError):
+            humidity_val = None
+
+    return temp_c, humidity_val
+
 
 
 def sync_daily_health(person_name, days_back=30):
-    """Sync daily health metrics from Garmin Connect.
+    """Sync daily health metrics (steps and weight) from Garmin Connect.
 
-    Fetches steps, resting HR, stress, calories, weight, and VO2 Max
-    for each day in the date range.
+    Uses range endpoints instead of per-day calls: steps and weight are each
+    fetched for the whole window in a single library call (the steps endpoint
+    internally chunks into 28-day windows), then merged by date. This replaces
+    the old ~5-calls-per-day loop.
 
     Args:
         person_name: Name of the person to associate data with.
@@ -453,106 +477,87 @@ def sync_daily_health(person_name, days_back=30):
 
     end_date = date.today()
     start_date = end_date - timedelta(days=days_back)
+    start_str = start_date.isoformat()
+    end_str = end_date.isoformat()
 
-    synced = 0
     errors = []
 
-    total_days = (end_date - start_date).days + 1
-    current = start_date
-    day_num = 0
-    while current <= end_date:
-        day_num += 1
-        date_str = current.isoformat()
-        _set_sync_status(f"Syncing health data... ({day_num}/{total_days}) {date_str}")
+    # Accumulate per-date data: {date_str: {"steps": ..., "weight_kg": ...}}
+    by_date = {}
+
+    # --- Steps for the whole range (one library call) ---
+    _set_sync_status("Fetching steps...")
+    try:
+        steps_rows = garmin.get_daily_steps(start_str, end_str) or []
+        for row in steps_rows:
+            d = row.get("calendarDate") or row.get("date")
+            steps = row.get("totalSteps")
+            if d and steps is not None:
+                by_date.setdefault(d, {})["steps"] = int(steps)
+    except Exception as e:
+        errors.append(f"Steps: {str(e)}")
+
+    # --- Weight for the whole range (one library call) ---
+    _set_sync_status("Fetching weight...")
+    try:
+        for d, weight_kg in _extract_weights(garmin.get_body_composition(start_str, end_str)).items():
+            by_date.setdefault(d, {})["weight_kg"] = weight_kg
+    except Exception as e:
+        errors.append(f"Weight: {str(e)}")
+
+    # --- Merge and upsert ---
+    _set_sync_status("Saving health data...")
+    synced = 0
+    for date_str, fields in by_date.items():
+        cleaned = {k: v for k, v in fields.items() if v is not None}
+        if not cleaned:
+            continue
         try:
-            health_data = _fetch_daily_health(garmin, date_str)
-            if health_data:
-                upsert_daily_health(date_str, person_name, **health_data)
-                synced += 1
+            upsert_daily_health(date_str, person_name, **cleaned)
+            synced += 1
         except Exception as e:
             errors.append(f"{date_str}: {str(e)}")
-
-        current += timedelta(days=1)
 
     return {"synced": synced, "errors": errors}
 
 
-def _fetch_daily_health(garmin, date_str):
-    """Fetch all health metrics for a single day from Garmin.
-    Returns dict of health fields, or None if no data.
+def _extract_weights(body):
+    """Extract {calendarDate: weight_kg} from a body-composition range response.
+
+    Garmin returns weight in grams within a 'dateWeightList' (or similar).
+    When multiple weigh-ins exist for a day, the last one wins. Defensive
+    about the exact response shape.
     """
-    data = {}
+    result = {}
+    if not body:
+        return result
 
-    # Steps and calories from user summary
-    try:
-        summary = garmin.get_user_summary(date_str)
-        if summary:
-            data["steps"] = summary.get("totalSteps")
-            data["calories_total"] = summary.get("totalKilocalories")
-            data["calories_active"] = summary.get("activeKilocalories")
-    except Exception:
-        pass
+    entries = []
+    if isinstance(body, dict):
+        entries = (
+            body.get("dateWeightList")
+            or body.get("weightList")
+            or body.get("dailyWeightSummaries")
+            or []
+        )
+    elif isinstance(body, list):
+        entries = body
 
-    # Resting heart rate
-    try:
-        hr = garmin.get_heart_rates(date_str)
-        if hr:
-            data["resting_hr"] = hr.get("restingHeartRate")
-    except Exception:
-        pass
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        d = entry.get("calendarDate") or entry.get("date")
+        weight_g = entry.get("weight")
+        # Some payloads nest the weight under a summary object
+        if weight_g is None and isinstance(entry.get("latestWeight"), dict):
+            weight_g = entry["latestWeight"].get("weight")
+            d = d or entry["latestWeight"].get("calendarDate")
+        if d and weight_g and weight_g > 0:
+            # Normalize a full timestamp date to YYYY-MM-DD
+            d = str(d)[:10]
+            result[d] = weight_g / 1000.0  # grams to kg
 
-    # Stress data
-    try:
-        stress = garmin.get_stress_data(date_str)
-        if stress:
-            data["stress_avg"] = stress.get("avgStressLevel")
-            data["stress_max"] = stress.get("maxStressLevel")
-            # Durations are in seconds
-            data["stress_low_duration"] = stress.get("lowStressDuration")
-            data["stress_medium_duration"] = stress.get("mediumStressDuration")
-            data["stress_high_duration"] = stress.get("highStressDuration")
-    except Exception:
-        pass
-
-    # Weight from body composition
-    try:
-        body = garmin.get_body_composition(date_str)
-        if body:
-            # Body composition may return weight in grams or have nested structure
-            weight_list = body.get("dateWeightList") or body.get("weightList") or []
-            if weight_list:
-                # Take the most recent weight entry for that day
-                latest = weight_list[-1]
-                weight_g = latest.get("weight")
-                if weight_g and weight_g > 0:
-                    data["weight_kg"] = weight_g / 1000.0  # grams to kg
-    except Exception:
-        pass
-
-    # VO2 Max
-    try:
-        # Try the fitness stats endpoint
-        fitness = garmin.get_max_metrics(date_str)
-        if fitness:
-            # maxMetrics returns a list of metrics
-            if isinstance(fitness, list):
-                for metric in fitness:
-                    if metric.get("generic") and metric["generic"].get("vo2MaxValue"):
-                        data["vo2_max"] = metric["generic"]["vo2MaxValue"]
-                        break
-            elif isinstance(fitness, dict):
-                vo2 = fitness.get("vo2MaxValue") or fitness.get("vo2Max")
-                if vo2:
-                    data["vo2_max"] = vo2
-    except Exception:
-        pass
-
-    # Return None if we got nothing useful
-    if not any(v is not None for v in data.values()):
-        return None
-
-    # Filter out None values
-    return {k: v for k, v in data.items() if v is not None}
+    return result
 
 
 
@@ -587,7 +592,7 @@ def sync_all(person_name=None, days_back=30):
     """
     results = {"messages": [], "errors": []}
 
-    # Step 1: Connect
+    # Step 1: Verify credentials are configured (each sub-step logs in itself)
     _set_sync_status("Connecting to Garmin...")
     email, password = get_garmin_credentials()
     if not email or not password:
@@ -595,17 +600,7 @@ def sync_all(person_name=None, days_back=30):
         clear_sync_status()
         return results
 
-    try:
-        from garminconnect import Garmin
-        token_dir = _get_token_dir()
-        garmin = Garmin(email=email, password=password)
-        garmin.login(token_dir)
-    except Exception as e:
-        results["errors"].append(f"Connection failed: {str(e)}")
-        clear_sync_status()
-        return results
-
-    # Step 2: Sync activities
+    # Step 2: Sync activities (weather is fetched inline per activity)
     _set_sync_status("Fetching activities from Garmin...")
     act_result = sync_activities(person_name=person_name, days_back=days_back)
     if act_result["imported"] > 0:
@@ -622,13 +617,6 @@ def sync_all(person_name=None, days_back=30):
             results["messages"].append(f"Health data synced for {health_result['synced']} days.")
         if health_result["errors"]:
             results["errors"].extend(health_result["errors"][:3])
-
-    # Step 4: Backfill weather using Garmin's activity weather API
-    _set_sync_status("Fetching weather data for activities...")
-    weather_filled = _backfill_weather(get_db(), garmin)
-    if weather_filled > 0:
-        get_db().commit()
-        results["messages"].append(f"Weather data added for {weather_filled} activities.")
 
     # Done
     set_last_sync_time()

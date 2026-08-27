@@ -225,18 +225,29 @@ figure {
     text-transform: capitalize;
 }
 
-.badge-outdoor {
-    background-color: #2e7d32;
-    color: white;
-}
-
 .badge-cardio {
     background-color: #e65100;
     color: white;
 }
 
+.badge-flexibility {
+    background-color: #00897b;
+    color: white;
+}
+
+.badge-endurance {
+    background-color: #2e7d32;
+    color: white;
+}
+
 .badge-strength {
     background-color: #1a2b6b;
+    color: white;
+}
+
+/* Legacy alias kept for any stray references */
+.badge-outdoor {
+    background-color: #2e7d32;
     color: white;
 }
 
@@ -396,16 +407,29 @@ button[aria-busy="true"] {
     background: linear-gradient(90deg, var(--pico-primary), var(--pico-primary-hover));
 }
 
-.xp-bar-outdoor {
-    background: linear-gradient(90deg, #2e7d32, #66bb6a);
-}
-
 .xp-bar-cardio {
     background: linear-gradient(90deg, #e65100, #ff9800);
 }
 
+.xp-bar-flexibility {
+    background: linear-gradient(90deg, #00897b, #4db6ac);
+}
+
+.xp-bar-endurance {
+    background: linear-gradient(90deg, #2e7d32, #66bb6a);
+}
+
 .xp-bar-strength {
     background: linear-gradient(90deg, #1a2b6b, #5c6bc0);
+}
+
+.xp-bar-steps {
+    background: linear-gradient(90deg, #6a1b9a, #ab47bc);
+}
+
+/* Legacy alias */
+.xp-bar-outdoor {
+    background: linear-gradient(90deg, #2e7d32, #66bb6a);
 }
 
 
@@ -599,6 +623,12 @@ button[aria-busy="true"] {
 
 .history-xp-left {
     display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.history-xp-row {
+    display: flex;
     align-items: baseline;
     gap: 0.75rem;
 }
@@ -650,4 +680,15 @@ button[aria-busy="true"] {
     .history-detail-grid {
         grid-template-columns: 1fr;
     }
+}
+
+
+/* Steps skill styling */
+.badge-steps {
+    background-color: #6a1b9a;
+    color: white;
+}
+
+.xp-bar-steps {
+    background: linear-gradient(90deg, #6a1b9a, #ab47bc);
 }
