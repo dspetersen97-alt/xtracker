@@ -1,19 +1,19 @@
 {% extends "base.html" %}
-{% block title %}{{ activity.activity_type | capitalize }} - {{ activity.activity_date }} - xtracker{% endblock %}
+{% block title %}{{ activity.activity_type | exercise_name }} - {{ activity.activity_date }} - xTracker{% endblock %}
 
 {% block content %}
 <nav aria-label="Breadcrumb">
     <ul>
         <li><a href="{{ url_for('activities.history') }}">History</a></li>
-        <li>{{ activity.activity_type | capitalize }} - {{ activity.activity_date }}</li>
+        <li>{{ activity.activity_type | exercise_name }} - {{ activity.activity_date }}</li>
     </ul>
 </nav>
 
 <article>
     <header>
         <h2>
-            <span class="badge badge-{{ 'outdoor' if activity.activity_type in ('hike', 'walk', 'run') else ('strength' if activity.activity_type == 'strength' else 'cardio') }}">
-                {{ activity.activity_type | capitalize }}
+            <span class="badge badge-{{ activity.skill_breakdown[0].skill if activity.skill_breakdown else 'cardio' }}">
+                {{ activity.activity_type | exercise_name }}
             </span>
             {% if activity.title %}{{ activity.title }}{% else %}{{ activity.activity_date }}{% endif %}
         </h2>
@@ -148,8 +148,15 @@
     <article style="background: var(--pico-card-background-color);">
         <div style="display: flex; align-items: center; gap: 1rem;">
             <span style="font-size: 2rem; font-weight: 700; color: var(--pico-primary);">{{ activity.computed_score }}</span>
-            <span>points</span>
+            <span>XP total</span>
         </div>
+        {% if activity.skill_breakdown %}
+        <div style="margin-top: 0.75rem; display: flex; flex-wrap: wrap; gap: 0.5rem;">
+            {% for item in activity.skill_breakdown %}
+            <span class="badge badge-{{ item.skill }}">{{ item.skill | capitalize }} +{{ item.xp }} XP ({{ item.pct }}%)</span>
+            {% endfor %}
+        </div>
+        {% endif %}
         {% if activity.weather_multiplier_computed and activity.weather_multiplier_computed > 1.0 %}
         <dl class="detail-grid" style="margin-top: 0.5rem;">
             <dt>Weather Multiplier</dt>

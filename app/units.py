@@ -111,6 +111,30 @@ def format_duration(minutes):
         return f"{hours}:{mins:02d}:{secs:02d}"
     return f"{mins}:{secs:02d}"
 
+def format_activity_datetime(value):
+    """Format a stored activity_date for display, dropping seconds.
+
+    Accepts a date ('2026-08-24') or datetime ('2026-08-24 17:04:37',
+    optionally with a 'T' separator). Returns the date with time as
+    'YYYY-MM-DD HH:MM', or just the date when there is no time component.
+    Falls back to the original string if it can't be parsed.
+    """
+    if not value:
+        return value
+    text = str(value).strip()
+    # Split date and time on either a space or a 'T' separator
+    sep = " " if " " in text else ("T" if "T" in text else None)
+    if sep is None:
+        return text  # date-only
+    date_part, time_part = text.split(sep, 1)
+    time_part = time_part.strip()
+    if not time_part:
+        return date_part
+    # Keep only HH:MM
+    hm = ":".join(time_part.split(":")[:2])
+    return f"{date_part} {hm}"
+
+
 def convert_activity_for_display(activity, units="metric"):
     """Convert an activity dict values for display in the given unit system.
     Does NOT modify the original dict. Returns a new one.
@@ -166,6 +190,9 @@ def convert_activity_for_display(activity, units="metric"):
         else:
             a["best_pace_display"] = "--"
         a["pace_unit"] = "/km"
+
+    # Friendly date/time display: strip seconds from any time component.
+    a["activity_date_display"] = format_activity_datetime(a.get("activity_date"))
 
     if a.get("duration_minutes") is not None:
         a["duration_display"] = format_duration(a["duration_minutes"])

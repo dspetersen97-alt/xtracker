@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 
-{% block title %}xtracker — Home{% endblock %}
+{% block title %}xTracker — Home{% endblock %}
 
 {% block content %}
-<hgroup>
-    <h1>xtracker</h1>
+<div style="text-align: center; margin-bottom: 2rem;">
+    <img src="{{ url_for('static', filename='images/xTracker Text.png') }}" alt="xTracker" style="height: 65px; width: auto;">
     <p>Your personal exercise tracker</p>
-</hgroup>
+</div>
 
 <!-- Quick Stats -->
 <div class="grid">
@@ -28,7 +28,7 @@
 </div>
 
 {% if stats.last_workout %}
-<p><small>Last workout: <strong>{{ stats.last_workout.type | capitalize }}</strong> on {{ stats.last_workout.date }}</small></p>
+<p><small>Last workout: <strong>{{ stats.last_workout.type | exercise_name }}</strong> on {{ stats.last_workout.date }}</small></p>
 {% endif %}
 
 <!-- Quick Actions -->

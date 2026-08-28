@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Log Workout — xtracker{% endblock %}
+{% block title %}Log Workout — xTracker{% endblock %}
 
 {% block content %}
 <h1>Log Workout</h1>
@@ -11,7 +11,7 @@
         <option value="" disabled {% if not form or not form.get('activity_type') %}selected{% endif %}>Choose activity type...</option>
         {% for et in exercise_types %}
         <option value="{{ et.name }}" {% if form and form.get('activity_type') == et.name %}selected{% endif %}>
-            {{ et.name | capitalize }}
+            {{ et.name | exercise_name }}
         </option>
         {% endfor %}
     </select>
@@ -40,8 +40,8 @@
            placeholder="e.g. 45"
            value="{{ form.get('duration_minutes', '') if form else '' }}">
 
-    <!-- Distance (outdoor + cardio types) -->
-    <div id="field-distance" class="type-field" data-types="hike,walk,run,cardio">
+    <!-- Distance (outdoor types) -->
+    <div id="field-distance" class="type-field" data-types="hike,walk,run">
         <label for="distance_km">Distance (km)</label>
         <input type="number" id="distance_km" name="distance_km" min="0" step="0.01"
                placeholder="e.g. 5.5"
@@ -64,8 +64,8 @@
                value="{{ form.get('machine', '') if form else '' }}">
     </div>
 
-    <!-- Heart Rate (cardio) -->
-    <div id="field-heartrate" class="type-field" data-types="cardio">
+    <!-- Heart Rate (cardio + hiit/yoga/pilates) -->
+    <div id="field-heartrate" class="type-field" data-types="cardio,hiit,yoga,pilates">
         <label for="heart_rate">Avg Heart Rate (bpm)</label>
         <input type="number" id="heart_rate" name="heart_rate" min="0"
                placeholder="e.g. 145"
@@ -73,7 +73,7 @@
     </div>
 
     <!-- Calories -->
-    <div id="field-calories" class="type-field" data-types="cardio,hike,walk,run">
+    <div id="field-calories" class="type-field" data-types="cardio,hike,walk,run,hiit">
         <label for="calories">Calories Burned</label>
         <input type="number" id="calories" name="calories" min="0"
                placeholder="e.g. 350"
@@ -96,7 +96,7 @@
     </div>
 
     <!-- Weather (optional, for scoring) -->
-    <div id="field-weather" class="type-field" data-types="hike,walk,run,cardio">
+    <div id="field-weather" class="type-field" data-types="hike,walk,run">
         <details>
             <summary>Weather Conditions (optional - earns bonus points)</summary>
             <div class="grid">

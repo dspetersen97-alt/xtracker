@@ -146,19 +146,31 @@ class TestActivityFiltering:
 class TestExerciseTypes:
     def test_default_types_seeded(self, app_context):
         types = get_exercise_types()
-        assert len(types) == 5
+        assert len(types) == 6
         names = [t["name"] for t in types]
-        assert "hike" in names
-        assert "walk" in names
         assert "run" in names
-        assert "cardio" in names
-        assert "strength" in names
+        assert "walk" in names
+        assert "hike" in names
+        assert "hiit" in names
+        assert "yoga" in names
+        assert "pilates" in names
+
+    def test_default_types_have_skill_distributions(self, app_context):
+        run = get_exercise_type_by_name("run")
+        assert run["skills_parsed"] == {"cardio": 75, "endurance": 25}
+
+        yoga = get_exercise_type_by_name("yoga")
+        assert yoga["skills_parsed"] == {"flexibility": 80, "strength": 20}
+
+        # All default distributions must sum to 100
+        for et in get_exercise_types():
+            assert sum(et["skills_parsed"].values()) == 100
 
     def test_get_type_by_name(self, app_context):
-        et = get_exercise_type_by_name("strength")
+        et = get_exercise_type_by_name("pilates")
         assert et is not None
-        assert et["category"] == "strength"
-        assert "exercises" in et["fields_parsed"]
+        assert et["skills_parsed"] == {"flexibility": 50, "strength": 50}
+        assert "duration" in et["fields_parsed"]
 
     def test_get_type_not_found(self, app_context):
         assert get_exercise_type_by_name("swimming") is None
@@ -166,19 +178,21 @@ class TestExerciseTypes:
     def test_create_custom_type(self, app_context):
         type_id = create_exercise_type(
             name="Swimming",
-            category="cardio",
+            skills={"cardio": 60, "endurance": 40},
             fields=["date", "duration", "distance", "notes"],
         )
         assert type_id is not None
         et = get_exercise_type_by_name("swimming")
         assert et is not None
-        assert et["category"] == "cardio"
+        assert et["skills_parsed"] == {"cardio": 60, "endurance": 40}
         assert et["is_default"] == 0
 
     def test_delete_custom_type(self, app_context):
-        type_id = create_exercise_type("yoga", "cardio", ["date", "duration", "notes"])
+        type_id = create_exercise_type(
+            "climbing", {"strength": 70, "endurance": 30}, ["date", "duration", "notes"]
+        )
         assert delete_exercise_type(type_id) is True
-        assert get_exercise_type_by_name("yoga") is None
+        assert get_exercise_type_by_name("climbing") is None
 
     def test_cannot_delete_default_type(self, app_context):
         et = get_exercise_type_by_name("run")

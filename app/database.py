@@ -63,13 +63,16 @@ def init_db(app):
     # Run migrations for existing databases
     _migrate(db)
 
-    # Seed default exercise types if empty
-    cursor = db.execute("SELECT COUNT(*) FROM exercise_types")
+    # Seed default exercise types if no defaults exist. (Checking for the
+    # presence of defaults rather than an empty table means the skill-based
+    # defaults are (re)seeded even when custom types remain after a
+    # category->skills migration.)
+    cursor = db.execute("SELECT COUNT(*) FROM exercise_types WHERE is_default = 1")
     if cursor.fetchone()[0] == 0:
         for et in DEFAULT_EXERCISE_TYPES:
             db.execute(
-                "INSERT INTO exercise_types (name, category, fields, is_default) VALUES (?, ?, ?, 1)",
-                (et["name"], et["category"], et["fields"]),
+                "INSERT OR IGNORE INTO exercise_types (name, category, skills, fields, is_default) VALUES (?, ?, ?, ?, 1)",
+                (et["name"], et.get("category", ""), et["skills"], et["fields"]),
             )
         db.commit()
 
@@ -133,6 +136,15 @@ def _migrate(db):
     if "start_longitude" not in existing_cols:
         db.execute("ALTER TABLE activities ADD COLUMN start_longitude REAL")
 
+    # Migrate exercise_types table: add skills column (skill % distribution)
+    et_cursor = db.execute("PRAGMA table_info(exercise_types)")
+    et_cols = {row[1] for row in et_cursor.fetchall()}
+    if "skills" not in et_cols:
+        db.execute("ALTER TABLE exercise_types ADD COLUMN skills TEXT NOT NULL DEFAULT '{}'")
+        # Fresh-start reseed: remove old default types (category-based) and
+        # let the seeding step below re-insert the new skill-based defaults.
+        db.execute("DELETE FROM exercise_types WHERE is_default = 1")
+
     # Migrate people table: add profile columns
     people_cursor = db.execute("PRAGMA table_info(people)")
     people_cols = {row[1] for row in people_cursor.fetchall()}
@@ -189,7 +201,8 @@ CREATE INDEX IF NOT EXISTS idx_activities_type ON activities(activity_type);
 CREATE TABLE IF NOT EXISTS exercise_types (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,
-    category TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT '',
+    skills TEXT NOT NULL DEFAULT '{}',
     fields TEXT NOT NULL DEFAULT '[]',
     is_default INTEGER NOT NULL DEFAULT 0
 );
@@ -233,28 +246,33 @@ CREATE INDEX IF NOT EXISTS idx_daily_health_person ON daily_health(person);
 
 DEFAULT_EXERCISE_TYPES = [
     {
-        "name": "hike",
-        "category": "outdoor",
+        "name": "run",
+        "skills": '{"cardio": 75, "endurance": 25}',
         "fields": '["date","duration","distance","elevation_gain","notes"]',
     },
     {
         "name": "walk",
-        "category": "outdoor",
+        "skills": '{"cardio": 100}',
         "fields": '["date","duration","distance","elevation_gain","notes"]',
     },
     {
-        "name": "run",
-        "category": "outdoor",
+        "name": "hike",
+        "skills": '{"cardio": 50, "endurance": 50}',
         "fields": '["date","duration","distance","elevation_gain","notes"]',
     },
     {
-        "name": "cardio",
-        "category": "cardio",
-        "fields": '["date","duration","machine","calories","heart_rate","notes"]',
+        "name": "hiit",
+        "skills": '{"cardio": 25, "endurance": 50, "strength": 25}',
+        "fields": '["date","duration","calories","heart_rate","notes"]',
     },
     {
-        "name": "strength",
-        "category": "strength",
-        "fields": '["date","duration","exercises","notes"]',
+        "name": "yoga",
+        "skills": '{"flexibility": 80, "strength": 20}',
+        "fields": '["date","duration","heart_rate","notes"]',
+    },
+    {
+        "name": "pilates",
+        "skills": '{"flexibility": 50, "strength": 50}',
+        "fields": '["date","duration","heart_rate","notes"]',
     },
 ]

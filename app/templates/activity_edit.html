@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}Edit Workout - xtracker{% endblock %}
+{% block title %}Edit Workout - xTracker{% endblock %}
 
 {% block content %}
 <nav aria-label="Breadcrumb">
     <ul>
         <li><a href="{{ url_for('activities.history') }}">History</a></li>
-        <li><a href="{{ url_for('activities.activity_detail', activity_id=activity.id) }}">Detail</a></li>
+        <li><a href="{{ url_for('activities.history') }}">Detail</a></li>
         <li>Edit</li>
     </ul>
 </nav>
@@ -19,7 +19,7 @@
             <select id="activity_type" name="activity_type" required>
                 {% for et in exercise_types %}
                 <option value="{{ et.name }}" {% if activity.activity_type == et.name %}selected{% endif %}>
-                    {{ et.name | capitalize }}
+                    {{ et.name | exercise_name }}
                 </option>
                 {% endfor %}
             </select>
@@ -153,7 +153,7 @@
     <!-- Submit -->
     <div class="grid">
         <button type="submit">Save Changes</button>
-        <a href="{{ url_for('activities.activity_detail', activity_id=activity.id) }}" role="button" class="secondary outline">Cancel</a>
+        <a href="{{ url_for('activities.history') }}" role="button" class="secondary outline">Cancel</a>
     </div>
 </form>
 {% endblock %}

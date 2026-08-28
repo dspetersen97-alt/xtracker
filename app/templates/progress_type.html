@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ activity_type | capitalize }} Progress — xtracker{% endblock %}
+{% block title %}{{ activity_type | exercise_name }} Progress — xTracker{% endblock %}
 
 {% block head %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -9,11 +9,11 @@
 <nav aria-label="Breadcrumb">
     <ul>
         <li><a href="{{ url_for('progress.dashboard') }}">Progress</a></li>
-        <li>{{ activity_type | capitalize }}</li>
+        <li>{{ activity_type | exercise_name }}</li>
     </ul>
 </nav>
 
-<h1>{{ activity_type | capitalize }} — Progress</h1>
+<h1>{{ activity_type | exercise_name }} — Progress</h1>
 
 <!-- Time range toggle -->
 <nav>

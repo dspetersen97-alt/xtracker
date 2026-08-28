@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}History - xtracker{% endblock %}
+{% block title %}History - xTracker{% endblock %}
 
 {% block content %}
 <h1>Workout History</h1>
@@ -12,7 +12,7 @@
             <option value="">All types</option>
             {% for et in exercise_types %}
             <option value="{{ et.name }}" {% if current_type == et.name %}selected{% endif %}>
-                {{ et.name | capitalize }}
+                {{ et.name | exercise_name }}
             </option>
             {% endfor %}
         </select>
@@ -49,44 +49,199 @@
 <p><small>{{ total }} workout{{ 's' if total != 1 else '' }} found</small></p>
 
 {% if activities %}
-<div class="overflow-auto">
+<div class="history-list">
     {% for activity in activities %}
-    <article>
-        <header>
-            <div style="display: flex; justify-content: space-between; align-items: center;">
+    <details class="history-item">
+        <summary class="history-header">
+            <div class="history-header-top">
                 <div>
-                    <span class="badge badge-{{ 'outdoor' if activity.activity_type in ('hike', 'walk', 'run') else ('strength' if activity.activity_type == 'strength' else 'cardio') }}">
-                        {{ activity.activity_type | capitalize }}
+                    <span class="history-arrow">&#9654;</span>
+                    <span class="badge badge-{{ activity.skill_breakdown[0].skill if activity.skill_breakdown else 'cardio' }}">
+                        {{ activity.activity_type | exercise_name }}
                     </span>
-                    <strong style="margin-left: 0.5rem;">{% if activity.title %}{{ activity.title }}{% else %}{{ activity.activity_date }}{% endif %}</strong>
+                    <strong style="margin-left: 0.5rem;">{% if activity.title %}{{ activity.title }}{% else %}{{ activity.activity_date_display }}{% endif %}</strong>
                 </div>
-                <a href="{{ url_for('activities.activity_detail', activity_id=activity.id) }}">View</a>
+                {% if activity.combined_xp %}
+                <span class="history-xp">+{{ activity.combined_xp }} XP</span>
+                {% endif %}
             </div>
-            <small>{{ activity.activity_date }}{% if activity.person %} &middot; {{ activity.person }}{% endif %}</small>
-        </header>
-        <div style="display: flex; gap: 1.5rem; flex-wrap: wrap;">
-            {% if activity.duration_display and activity.duration_display != '--' %}
-            <span>&#9201; {{ activity.duration_display }}</span>
+            <small class="history-date">{{ activity.activity_date_display }}{% if activity.person %} &middot; {{ activity.person }}{% endif %}</small>
+            <div class="history-metrics">
+                {% if activity.duration_display and activity.duration_display != '--' %}
+                <span>&#9201; {{ activity.duration_display }}</span>
+                {% endif %}
+                {% if activity.distance_display %}
+                <span>&#128739; {{ activity.distance_display }} {{ activity.distance_unit }}</span>
+                {% endif %}
+                {% if activity.steps %}
+                <span>&#128099; {{ "{:,}".format(activity.steps) }}</span>
+                {% endif %}
+                {% if activity.calories %}
+                <span>&#128293; {{ activity.calories }} cal</span>
+                {% endif %}
+            </div>
+        </summary>
+
+        <!-- Expanded detail view -->
+        <div class="history-detail">
+            <div class="history-detail-grid">
+                {% if activity.duration_display and activity.duration_display != '--' %}
+                <div class="detail-item">
+                    <span class="detail-label">Duration</span>
+                    <span class="detail-value">{{ activity.duration_display }}</span>
+                </div>
+                {% endif %}
+
+                {% if activity.distance_display %}
+                <div class="detail-item">
+                    <span class="detail-label">Distance</span>
+                    <span class="detail-value">{{ activity.distance_display }} {{ activity.distance_unit }}</span>
+                </div>
+                {% endif %}
+
+                {% if activity.calories %}
+                <div class="detail-item">
+                    <span class="detail-label">Calories</span>
+                    <span class="detail-value">{{ activity.calories }}</span>
+                </div>
+                {% endif %}
+
+                {% if activity.steps %}
+                <div class="detail-item">
+                    <span class="detail-label">Steps</span>
+                    <span class="detail-value">{{ "{:,}".format(activity.steps) }}</span>
+                </div>
+                {% endif %}
+
+                {% if activity.avg_hr %}
+                <div class="detail-item">
+                    <span class="detail-label">Avg Heart Rate</span>
+                    <span class="detail-value">{{ activity.avg_hr }} bpm</span>
+                </div>
+                {% endif %}
+
+                {% if activity.max_hr %}
+                <div class="detail-item">
+                    <span class="detail-label">Max Heart Rate</span>
+                    <span class="detail-value">{{ activity.max_hr }} bpm</span>
+                </div>
+                {% endif %}
+
+                {% if activity.avg_pace_display and activity.avg_pace_display != '--' %}
+                <div class="detail-item">
+                    <span class="detail-label">Avg Pace</span>
+                    <span class="detail-value">{{ activity.avg_pace_display }} {{ activity.pace_unit }}</span>
+                </div>
+                {% endif %}
+
+                {% if activity.best_pace_display and activity.best_pace_display != '--' %}
+                <div class="detail-item">
+                    <span class="detail-label">Best Pace</span>
+                    <span class="detail-value">{{ activity.best_pace_display }} {{ activity.pace_unit }}</span>
+                </div>
+                {% endif %}
+
+                {% if activity.total_ascent_display %}
+                <div class="detail-item">
+                    <span class="detail-label">Total Ascent</span>
+                    <span class="detail-value">{{ activity.total_ascent_display }} {{ activity.elevation_unit }}</span>
+                </div>
+                {% endif %}
+
+                {% if activity.min_elevation_display %}
+                <div class="detail-item">
+                    <span class="detail-label">Min Elevation</span>
+                    <span class="detail-value">{{ activity.min_elevation_display }} {{ activity.elevation_unit }}</span>
+                </div>
+                {% endif %}
+
+                {% if activity.max_elevation_display %}
+                <div class="detail-item">
+                    <span class="detail-label">Max Elevation</span>
+                    <span class="detail-value">{{ activity.max_elevation_display }} {{ activity.elevation_unit }}</span>
+                </div>
+                {% endif %}
+
+                {% if activity.weather_temp_c is not none %}
+                <div class="detail-item detail-tooltip-wrap">
+                    <span class="detail-label">Temperature</span>
+                    <span class="detail-value">{% if units == 'imperial' %}{{ (activity.weather_temp_c * 9/5 + 32) | round(0) | int }}&deg;F{% else %}{{ activity.weather_temp_c | round(1) }}&deg;C{% endif %}</span>
+                    {% if activity.weather_multiplier_computed and activity.weather_multiplier_computed > 1.0 %}
+                    <span class="detail-tooltip">{{ activity.weather_multiplier_computed }}x XP multiplier</span>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                {% if activity.weather_humidity is not none %}
+                <div class="detail-item detail-tooltip-wrap">
+                    <span class="detail-label">Humidity</span>
+                    <span class="detail-value">{{ activity.weather_humidity | round(0) | int }}%</span>
+                    {% if activity.weather_multiplier_computed and activity.weather_multiplier_computed > 1.0 %}
+                    <span class="detail-tooltip">{{ activity.weather_multiplier_computed }}x XP multiplier</span>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                {% if activity.notes %}
+                <div class="detail-item" style="grid-column: 1 / -1;">
+                    <span class="detail-label">Notes</span>
+                    <span class="detail-value">{{ activity.notes }}</span>
+                </div>
+                {% endif %}
+            </div>
+
+            {% if activity.details_parsed and activity.details_parsed.get('exercises') %}
+            <h4 style="margin-top: 1rem;">Exercises</h4>
+            <figure>
+                <table role="grid">
+                    <thead>
+                        <tr><th>Exercise</th><th>Sets</th><th>Reps</th><th>Weight (kg)</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for ex in activity.details_parsed.exercises %}
+                        <tr>
+                            <td>{{ ex.name }}</td>
+                            <td>{{ ex.get('sets', '-') }}</td>
+                            <td>{{ ex.get('reps', '-') }}</td>
+                            <td>{{ ex.get('weight_kg', '-') }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </figure>
             {% endif %}
-            {% if activity.distance_display %}
-            <span>&#128099; {{ activity.distance_display }} {{ activity.distance_unit }}</span>
+
+            {% if activity.computed_score or activity.steps_xp %}
+            <div class="history-xp-footer">
+                <div class="history-xp-left">
+                    {% for item in activity.skill_breakdown %}
+                    {% if item.xp %}
+                    <div class="history-xp-row">
+                        <span class="history-xp-skill">{{ item.skill | capitalize }} Level: {{ item.level or 1 }}</span>
+                        <span class="history-xp-gained">+{{ item.xp }} XP</span>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                    {% if activity.steps_xp %}
+                    <div class="history-xp-row">
+                        <span class="history-xp-skill">Steps Level: {{ activity.steps_level or 1 }}</span>
+                        <span class="history-xp-gained">+{{ activity.steps_xp }} XP</span>
+                    </div>
+                    {% endif %}
+                </div>
+                <span class="history-xp-total">Total Fitness Level: {{ activity.total_fitness_level or 5 }}</span>
+            </div>
             {% endif %}
-            {% if activity.calories %}
-            <span>&#128293; {{ activity.calories }} cal</span>
-            {% endif %}
+
+            <div class="history-actions">
+                <a href="{{ url_for('activities.activity_edit', activity_id=activity.id) }}" role="button" class="outline" style="font-size: 0.85rem;">Edit</a>
+                <form method="POST" action="{{ url_for('activities.activity_delete', activity_id=activity.id) }}"
+                      onsubmit="return confirm('Delete this workout?');" style="display: inline; margin: 0;">
+                    <button type="submit" class="secondary outline" style="font-size: 0.85rem;">Delete</button>
+                </form>
+            </div>
         </div>
-        {% if activity.computed_score %}
-        <div style="margin-top: 0.5rem;">
-            <span style="font-weight: 600; color: var(--pico-primary);">&#9733; {{ activity.computed_score }} pts</span>
-            {% if activity.weather_multiplier_computed and activity.weather_multiplier_computed > 1.0 %}
-            <small style="margin-left: 0.5rem; color: var(--pico-muted-color);">({{ activity.weather_multiplier_computed }}x weather)</small>
-            {% endif %}
-        </div>
-        {% endif %}
-        {% if activity.notes %}
-        <p><small>{{ activity.notes | truncate(100) }}</small></p>
-        {% endif %}
-    </article>
+    </details>
     {% endfor %}
 </div>
 
